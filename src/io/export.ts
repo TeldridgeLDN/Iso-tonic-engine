@@ -7,14 +7,27 @@ import type { SceneDocument } from '../core/model.ts';
 import { renderSceneToString } from '../render/renderer.ts';
 import { kebabCase } from './filename.ts';
 import {
-  assembleSvg,
+  assembleSvgWithMeta,
   computeBBox,
   exportDimensions,
   stripEditorOnly,
   type BBox,
 } from './svg-prep.ts';
+import { buildWrittenDescription } from './description.ts';
+import {
+  buildLegendModel,
+  extendBBoxForLegend,
+  panelWidth,
+  renderLegendPanel,
+} from './legend.ts';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/** Options common to all raster/vector exports. */
+export interface ExportOptions {
+  /** Append the right-hand map-key / legend panel. Default false. */
+  legend?: boolean;
+}
 
 // ---------------------------------------------------------------------------
 // Shared prep
@@ -33,12 +46,33 @@ interface Prepared {
  *   omits grid dots when showGrid is unset) → strip any editor-only content
  *   defensively → compute bbox → assemble standalone SVG (white bg, viewBox +
  *   40px margin, inlined xmlns).
+ *
+ * <title>/<desc> accessibility metadata is always injected (free). When
+ * `opts.legend` is set, a right-hand key panel is appended and the export
+ * dimensions grow to keep it inside the viewBox (never cropped).
  */
-export function buildExportSvg(doc: SceneDocument): Prepared {
+export function buildExportSvg(doc: SceneDocument, opts: ExportOptions = {}): Prepared {
   // Default view: no grid, no hover/selection/spotlight attributes.
   const fragment = stripEditorOnly(renderSceneToString(doc));
   const bbox = computeBBox(fragment);
-  const svg = assembleSvg(fragment, bbox);
+  const desc = buildWrittenDescription(doc);
+  const title = doc.meta.title || 'Untitled map';
+
+  if (opts.legend) {
+    const width = panelWidth(bbox);
+    const layout = extendBBoxForLegend(bbox, width);
+    const legendFragment = renderLegendPanel(buildLegendModel(doc), layout, bbox);
+    const svg = assembleSvgWithMeta(fragment, bbox, {
+      title,
+      desc,
+      extendedBBox: layout.extendedBBox,
+      legendFragment,
+    });
+    const dims = exportDimensions(layout.extendedBBox);
+    return { svg, bbox, width: dims.width, height: dims.height };
+  }
+
+  const svg = assembleSvgWithMeta(fragment, bbox, { title, desc });
   const { width, height } = exportDimensions(bbox);
   return { svg, bbox, width, height };
 }
@@ -51,9 +85,19 @@ function fileBase(doc: SceneDocument): string {
 // SVG export
 // ---------------------------------------------------------------------------
 
-export function exportSVG(doc: SceneDocument): void {
-  const { svg } = buildExportSvg(doc);
+export function exportSVG(doc: SceneDocument, opts: ExportOptions = {}): void {
+  const { svg } = buildExportSvg(doc, opts);
   downloadBlob(svg, `${fileBase(doc)}.svg`, 'image/svg+xml');
+}
+
+// ---------------------------------------------------------------------------
+// Written description export (accessibility artefact)
+// ---------------------------------------------------------------------------
+
+/** Download the plain-text written description as '<title>-description.txt'. */
+export function exportDescription(doc: SceneDocument): void {
+  const text = buildWrittenDescription(doc);
+  downloadBlob(text, `${fileBase(doc)}-description.txt`, 'text/plain;charset=utf-8');
 }
 
 // ---------------------------------------------------------------------------
@@ -66,9 +110,10 @@ export function exportSVG(doc: SceneDocument): void {
  */
 export async function exportPNG(
   doc: SceneDocument,
-  scale: 1 | 2 | 4
+  scale: 1 | 2 | 4,
+  opts: ExportOptions = {}
 ): Promise<void> {
-  const { svg, width, height } = buildExportSvg(doc);
+  const { svg, width, height } = buildExportSvg(doc, opts);
   const img = await svgToImage(svg);
 
   const canvas = document.createElement('canvas');
@@ -118,11 +163,14 @@ function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
  * Vector PDF: page auto-sized to the map's bbox aspect (pt units), then the
  * SVG is drawn via svg2pdf. Downloaded as '<title>.pdf'.
  */
-export async function exportPDF(doc: SceneDocument): Promise<void> {
+export async function exportPDF(
+  doc: SceneDocument,
+  opts: ExportOptions = {}
+): Promise<void> {
   const { jsPDF } = await import('jspdf');
   const { svg2pdf } = await import('svg2pdf.js');
 
-  const { svg, width, height } = buildExportSvg(doc);
+  const { svg, width, height } = buildExportSvg(doc, opts);
   const w = Math.max(1, width);
   const h = Math.max(1, height);
 

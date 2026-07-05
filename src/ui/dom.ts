@@ -82,3 +82,29 @@ export function field(labelText: string, control: HTMLElement): HTMLElement {
   wrap.append(span, control);
   return wrap;
 }
+
+/**
+ * A collapsible side column: `content` plus a chevron toggle that hides it.
+ * `side` places the toggle on the correct edge and flips the chevron glyph.
+ */
+export function collapsibleColumn(
+  cls: string,
+  content: HTMLElement,
+  side: 'left' | 'right'
+): HTMLElement {
+  const col = el('div', { class: `iso-col ${cls}` });
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'iso-col-toggle';
+  toggle.title = side === 'left' ? 'Collapse palette' : 'Collapse panels';
+  toggle.textContent = side === 'left' ? '‹' : '›';
+  toggle.addEventListener('click', () => {
+    const collapsed = col.classList.toggle('is-collapsed');
+    toggle.textContent = collapsed
+      ? side === 'left' ? '›' : '‹'
+      : side === 'left' ? '‹' : '›';
+  });
+  if (side === 'left') col.append(content, toggle);
+  else col.append(toggle, content);
+  return col;
+}

@@ -316,3 +316,66 @@ export function exportDimensions(
     height: box.maxY - box.minY + margin * 2,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Accessibility metadata + legend-aware assembly
+// ---------------------------------------------------------------------------
+
+/** Escape text for use inside <title>/<desc> element content. */
+function escapeXmlText(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/**
+ * Build the <title>/<desc> accessibility metadata block, injected as the FIRST
+ * children of the exported <svg>. Empty strings are still emitted (as empty
+ * elements) so the element order is stable and assistive tech always finds them.
+ */
+export function metadataBlock(title: string, desc: string): string {
+  return `<title>${escapeXmlText(title)}</title><desc>${escapeXmlText(desc)}</desc>`;
+}
+
+export interface AssembleOptions {
+  /** map title → <title> (accessibility, always emitted). */
+  title?: string;
+  /** written description → <desc> (accessibility, always emitted). */
+  desc?: string;
+  /** bbox already extended to include any legend panel (drives viewBox). */
+  extendedBBox?: BBox | null;
+  /** legend panel SVG fragment, drawn after the scene fragment. */
+  legendFragment?: string;
+}
+
+/**
+ * Assemble a self-contained SVG with accessibility metadata and (optionally) a
+ * legend panel. The viewBox is padded from `extendedBBox` when supplied (so the
+ * panel is never cropped), otherwise from `bbox`. <title>/<desc> are always the
+ * first children; the legend fragment (if any) is drawn last.
+ */
+export function assembleSvgWithMeta(
+  fragment: string,
+  bbox: BBox | null,
+  opts: AssembleOptions = {},
+  margin = EXPORT_MARGIN
+): string {
+  const box: BBox = opts.extendedBBox ?? bbox ?? { minX: 0, minY: 0, maxX: 1, maxY: 1 };
+  const vbX = box.minX - margin;
+  const vbY = box.minY - margin;
+  const vbW = box.maxX - box.minX + margin * 2;
+  const vbH = box.maxY - box.minY + margin * 2;
+  const r = (v: number): number => Math.round(v * 100) / 100;
+
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" ` +
+    `viewBox="${r(vbX)} ${r(vbY)} ${r(vbW)} ${r(vbH)}" ` +
+    `width="${r(vbW)}" height="${r(vbH)}">` +
+    metadataBlock(opts.title ?? '', opts.desc ?? '') +
+    `<rect x="${r(vbX)}" y="${r(vbY)}" width="${r(vbW)}" height="${r(vbH)}" fill="#FFFFFF"/>` +
+    fragment +
+    (opts.legendFragment ?? '') +
+    `</svg>`
+  );
+}

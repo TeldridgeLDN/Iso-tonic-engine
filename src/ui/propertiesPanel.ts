@@ -20,6 +20,9 @@ import type { AppContext } from './context.ts';
 import { el, button, field, clear } from './dom.ts';
 import { FigurineEditor, isFigurine } from './figurineEditor.ts';
 
+/** Compass letters for the four quarter-turn facings (0=N … clockwise). */
+const FACING_LABELS = ['N', 'E', 'S', 'W'] as const;
+
 const TYPE_LABELS: Record<string, string> = {
   user: 'Person',
   team: 'Team',
@@ -69,8 +72,14 @@ export class PropertiesPanel {
     this.body.append(this.typeBadge(entity));
     this.body.append(this.labelField(entity));
     this.body.append(this.descriptionField(entity));
+    this.body.append(this.userGoalField(entity));
+    this.body.append(this.orgGoalField(entity));
     this.body.append(this.parentField(entity));
     this.body.append(this.layersField(entity));
+
+    // Rotation control — only for assets with more than one facing.
+    const rotate = this.rotateControl(entity);
+    if (rotate) this.body.append(rotate);
 
     // Param editor / figurine editor
     if (isFigurine(entity)) {
@@ -117,6 +126,66 @@ export class PropertiesPanel {
       }
     });
     return field('Description', ta);
+  }
+
+  private userGoalField(entity: Entity): HTMLElement {
+    return this.goalField(
+      entity,
+      'User goal',
+      'userGoal',
+      'What the user is trying to do',
+      entity.userGoal
+    );
+  }
+
+  private orgGoalField(entity: Entity): HTMLElement {
+    return this.goalField(
+      entity,
+      'Organisation goal',
+      'orgGoal',
+      'What the organisation wants',
+      entity.orgGoal
+    );
+  }
+
+  /** Shared builder for the two goal inputs (UpdateEntityProps, null clears). */
+  private goalField(
+    entity: Entity,
+    label: string,
+    key: 'userGoal' | 'orgGoal',
+    placeholder: string,
+    current: string | undefined
+  ): HTMLElement {
+    const input = el('input', {
+      class: 'iso-input',
+      attrs: { type: 'text', placeholder },
+    }) as HTMLInputElement;
+    input.value = current ?? '';
+    commitOn(input, () => {
+      const next = input.value.trim();
+      const prev = current ?? '';
+      if (next === prev) return;
+      // Empty string clears the goal (null), otherwise sets it.
+      this.ctx.history.execute(
+        new UpdateEntityProps(entity.id, { [key]: next === '' ? null : next })
+      );
+    });
+    return field(label, input);
+  }
+
+  /** ↻ rotate button + current-facing indicator. Absent for fixed assets. */
+  private rotateControl(entity: Entity): HTMLElement | null {
+    const def = getAsset(entity.asset.symbol);
+    if (!def || (def.orientations ?? 1) === 1) return null;
+
+    const facing = ((entity.placement.rotation ?? 0) % 4 + 4) % 4;
+    const btn = button(
+      `↻ Rotate · facing ${FACING_LABELS[facing]}`,
+      () => this.ctx.rotateSelected(),
+      'iso-btn iso-btn-sm iso-rotate-btn'
+    );
+    btn.title = 'Rotate 90° clockwise (or press R)';
+    return field('Orientation', btn);
   }
 
   private parentField(entity: Entity): HTMLElement {

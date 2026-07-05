@@ -369,15 +369,22 @@ export function plaqueBlock(label?: string, number?: number, userGroups?: string
   if (label) {
     frags.push(text(cursorX, rowY - 6, label, { size: 9, weight: 'bold', fill: INK, anchor: 'start' }));
   }
-  // user-group icons row beneath the badge/title
+  // user-group icons row beneath the badge/title. Columns are spaced by the
+  // MEASURED width of each label (approx char-count × font-size × 0.6) plus a
+  // fixed gutter, so long group names no longer collide with their neighbours.
   if (userGroups && userGroups.length) {
     const gy = rowY + 18; // below the title line
-    const spacing = 26;
-    userGroups.forEach((gLabel, i) => {
-      const gx = ox + 8 + i * spacing;
-      frags.push(personGlyph(gx, gy));
-      // tiny label beneath, upright
-      frags.push(text(gx, gy + 8, gLabel, { size: 5.5, fill: INK, anchor: 'middle' }));
+    const labelSize = 5.5;
+    const glyphMin = 16; // a person glyph needs ~16px even for a short label
+    const gutter = 8; // breathing space between adjacent columns
+    let gx = ox + 8;
+    userGroups.forEach((gLabel) => {
+      const labelW = Math.max(glyphMin, gLabel.length * labelSize * 0.6);
+      const cx = gx + labelW / 2; // centre the glyph + centred label in the column
+      frags.push(personGlyph(cx, gy));
+      // tiny label beneath, upright, centred under its glyph
+      frags.push(text(cx, gy + 8, gLabel, { size: labelSize, fill: INK, anchor: 'middle' }));
+      gx += labelW + gutter;
     });
   }
   return frags.join('');

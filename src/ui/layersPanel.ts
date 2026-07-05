@@ -108,6 +108,15 @@ export class LayersPanel {
       name.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') name.blur();
       });
+      // Present mode: clicking a layer name spotlights that layer's entities
+      // (whole-service group) instead of editing the name.
+      name.addEventListener('pointerdown', (e) => {
+        if (this.ctx.getMode() === 'present') {
+          e.preventDefault();
+          name.blur();
+          this.ctx.spotlightLayer(layer.id);
+        }
+      });
 
       const del = button('✕', () => this.deleteLayer(layer.id, layer.name), 'iso-icon-btn');
       del.title = 'Delete layer';

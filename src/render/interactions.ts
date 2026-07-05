@@ -65,6 +65,11 @@ export function resolveGridDrop(
     x: snapped.tx,
     y: snapped.ty,
     footprint: orig.footprint,
+    // Preserve rotation so the moved entity keeps its facing AND so collision
+    // is tested against the EFFECTIVE (rotated) footprint (footprintsOverlap →
+    // footprintTiles → effectiveFootprint). Dropping it here would silently
+    // un-rotate a dragged entity and mis-test overlaps.
+    ...(orig.rotation !== undefined ? { rotation: orig.rotation } : {}),
   };
 
   const unchanged = placement.x === orig.x && placement.y === orig.y;

@@ -212,6 +212,48 @@ describe('validateDocument — warnings not errors', () => {
     expect(res.ok).toBe(true);
     expect(res.warnings.some((w) => w.includes('overlap'))).toBe(false);
   });
+
+  it('does NOT warn on ancestor⊃descendant nesting (child inside parent)', () => {
+    const doc = baseDoc();
+    // parent zone 4x4 at origin; child 1x1 sits inside it — legitimate nesting.
+    doc.entities = [
+      entity({ id: 'zone', placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 4, d: 4 } } }),
+      entity({ id: 'child', parentId: 'zone', placement: { mode: 'grid', x: 1, y: 1, footprint: { w: 1, d: 1 } } }),
+    ];
+    const res = validateDocument(doc);
+    expect(res.ok).toBe(true);
+    expect(res.warnings.some((w) => w.includes('overlap'))).toBe(false);
+  });
+
+  it('does NOT warn on transitive ancestor nesting (grandchild inside grandparent)', () => {
+    const doc = baseDoc();
+    doc.entities = [
+      entity({ id: 'org', placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 6, d: 6 } } }),
+      entity({ id: 'dept', parentId: 'org', placement: { mode: 'grid', x: 1, y: 1, footprint: { w: 3, d: 3 } } }),
+      entity({ id: 'desk', parentId: 'dept', placement: { mode: 'grid', x: 2, y: 2, footprint: { w: 1, d: 1 } } }),
+    ];
+    const res = validateDocument(doc);
+    expect(res.ok).toBe(true);
+    // org⊃dept, org⊃desk, dept⊃desk are all nesting — no overlap warnings.
+    expect(res.warnings.some((w) => w.includes('overlap'))).toBe(false);
+  });
+
+  it('STILL warns on unrelated (non-nested) overlap', () => {
+    const doc = baseDoc();
+    // Two siblings under the same parent that genuinely collide with each other:
+    // their overlap is NOT ancestor/descendant, so it must still warn.
+    doc.entities = [
+      entity({ id: 'parent', placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 6, d: 6 } } }),
+      entity({ id: 'a', parentId: 'parent', placement: { mode: 'grid', x: 1, y: 1, footprint: { w: 2, d: 2 } } }),
+      entity({ id: 'b', parentId: 'parent', placement: { mode: 'grid', x: 2, y: 2, footprint: { w: 2, d: 2 } } }),
+    ];
+    const res = validateDocument(doc);
+    expect(res.ok).toBe(true);
+    const overlaps = res.warnings.filter((w) => w.includes('overlap'));
+    // Exactly the a↔b sibling collision warns; parent⊃a and parent⊃b are nesting.
+    expect(overlaps.some((w) => w.includes('"a"') && w.includes('"b"'))).toBe(true);
+    expect(overlaps.some((w) => w.includes('"parent"'))).toBe(false);
+  });
 });
 
 describe('unknown-field preservation through migrate + validate', () => {

@@ -3,4 +3,11 @@
 
 export { saveDocument, openDocument } from './persistence.ts';
 export { checkAutosave, setupAutosave, clearAutosave } from './autosave.ts';
-export { exportSVG, exportPNG, exportPDF } from './export.ts';
+export {
+  exportSVG,
+  exportPNG,
+  exportPDF,
+  exportDescription,
+  type ExportOptions,
+} from './export.ts';
+export { buildWrittenDescription } from './description.ts';

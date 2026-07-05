@@ -11,6 +11,7 @@ import type { Entity, EntityType, SceneDocument } from '../core/model.ts';
 import { createEmptyDocument } from '../core/model.ts';
 import { autoLayout } from '../core/layout.ts';
 import { randomFigurineParams } from '../assets/figurine.ts';
+import type { ServiceDomain } from './wizardQuestions.ts';
 
 // --- answer shape (what the modal collects) --------------------------------
 
@@ -23,10 +24,15 @@ export interface WizardRow {
   headcount?: number;
   /** chosen asset symbol (systems / physical infra), overrides step default. */
   asset?: string;
+  /** optional goals (zone rows): feed the entity's userGoal / orgGoal. */
+  userGoal?: string;
+  orgGoal?: string;
 }
 
 /** A step's collected value: single service info, or a list of rows. */
 export interface WizardAnswers {
+  /** Chosen service domain (skins the wizard). Absent = generic/public. */
+  domain?: ServiceDomain;
   service: { name: string; description?: string };
   organisations: WizardRow[];
   departments: WizardRow[];
@@ -104,11 +110,15 @@ export function wizardBuildDocument(
   answers.organisations.forEach((row, i) => {
     const id = idGen();
     orgIds.set(i, id);
+    const name = row.name || `Organisation ${i + 1}`;
     entities.push(
-      makeEntity(id, 'organisation', row.name || `Organisation ${i + 1}`, {
-        symbol: row.asset ?? 'department-zone',
-        params: { label: (row.name || `Organisation ${i + 1}`).toUpperCase() },
-      })
+      withGoals(
+        makeEntity(id, 'organisation', name, {
+          symbol: row.asset ?? 'department-zone',
+          params: { label: name.toUpperCase() },
+        }),
+        row
+      )
     );
   });
 
@@ -116,11 +126,15 @@ export function wizardBuildDocument(
   answers.departments.forEach((row, i) => {
     const id = idGen();
     deptIds.set(i, id);
+    const name = row.name || `Department ${i + 1}`;
     entities.push(
-      makeEntity(id, 'department', row.name || `Department ${i + 1}`, {
-        symbol: row.asset ?? 'department-zone',
-        params: { label: (row.name || `Department ${i + 1}`).toUpperCase() },
-      }, resolveParent(row.parentRef, orgIds))
+      withGoals(
+        makeEntity(id, 'department', name, {
+          symbol: row.asset ?? 'department-zone',
+          params: { label: name.toUpperCase() },
+        }, resolveParent(row.parentRef, orgIds)),
+        row
+      )
     );
   });
 
@@ -128,11 +142,15 @@ export function wizardBuildDocument(
   answers.teams.forEach((row, i) => {
     const id = idGen();
     teamIds.set(i, id);
+    const name = row.name || `Team ${i + 1}`;
     entities.push(
-      makeEntity(id, 'team', row.name || `Team ${i + 1}`, {
-        symbol: row.asset ?? 'department-zone',
-        params: { label: (row.name || `Team ${i + 1}`).toUpperCase() },
-      }, resolveParent(row.parentRef, deptIds))
+      withGoals(
+        makeEntity(id, 'team', name, {
+          symbol: row.asset ?? 'department-zone',
+          params: { label: name.toUpperCase() },
+        }, resolveParent(row.parentRef, deptIds)),
+        row
+      )
     );
   });
 
@@ -211,6 +229,15 @@ function makeEntity(
   };
   if (parentId) e.parentId = parentId;
   return e;
+}
+
+/** Attach optional userGoal / orgGoal (trimmed, non-empty) from a zone row. */
+function withGoals(entity: Entity, row: WizardRow): Entity {
+  const ug = row.userGoal?.trim();
+  const og = row.orgGoal?.trim();
+  if (ug) entity.userGoal = ug;
+  if (og) entity.orgGoal = og;
+  return entity;
 }
 
 /** parentRef is a stringified row index into an earlier step's id map. */

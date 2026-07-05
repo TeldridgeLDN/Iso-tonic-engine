@@ -35,6 +35,21 @@ export interface AppContext {
   cancelPlacement(): void;
 
   /**
+   * Rotate the currently-selected entity one quarter-turn clockwise, with the
+   * same collision-rejection feedback as a bad drop. No-op for fixed assets.
+   * Shared by the R key and the properties-panel rotate button.
+   */
+  rotateSelected(): void;
+
+  /** Current interaction mode ('edit' | 'present'). Panels adapt to it. */
+  getMode(): 'edit' | 'present';
+  /**
+   * Present-mode: spotlight all entities in a custom layer (layers-panel name
+   * click). Toggles off when the same layer is clicked again. No-op in edit.
+   */
+  spotlightLayer(layerId: string): void;
+
+  /**
    * Replace the entire document with a fresh one (new History), e.g. wizard
    * finish or "Load demo". Rewires subscriptions and refits the camera.
    */

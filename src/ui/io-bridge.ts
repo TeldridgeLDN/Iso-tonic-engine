@@ -9,6 +9,11 @@
 import type { SceneDocument } from '../core/model.ts';
 import type { History } from '../core/commands.ts';
 
+/** Options shared by the visual exporters (legend inclusion). */
+export interface ExportOpts {
+  legend?: boolean;
+}
+
 /** The fixed public surface of src/io/index.ts. */
 export interface IoModule {
   saveDocument(
@@ -19,9 +24,12 @@ export interface IoModule {
   checkAutosave(): { doc: SceneDocument; timestamp: string } | null;
   setupAutosave(history: History): void;
   clearAutosave(): void;
-  exportSVG(doc: SceneDocument): void;
-  exportPNG(doc: SceneDocument, scale: 1 | 2 | 4): Promise<void>;
-  exportPDF(doc: SceneDocument): Promise<void>;
+  // Wave 2: written description + legend option on the visual exporters.
+  buildWrittenDescription(doc: SceneDocument): string;
+  exportDescription(doc: SceneDocument): void;
+  exportSVG(doc: SceneDocument, opts?: ExportOpts): void;
+  exportPNG(doc: SceneDocument, scale: 1 | 2 | 4, opts?: ExportOpts): Promise<void>;
+  exportPDF(doc: SceneDocument, opts?: ExportOpts): Promise<void>;
 }
 
 // The dynamic-import specifier. Kept as a variable the bundler can still

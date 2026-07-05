@@ -4,7 +4,9 @@
 // a "Start blank" escape hatch and a footer "Load demo" link.
 
 import {
-  WIZARD_STEPS,
+  resolveSteps,
+  stepById,
+  DOMAIN_OPTIONS,
   type WizardStep,
   type StepId,
 } from './wizardQuestions.ts';
@@ -69,9 +71,15 @@ export class Wizard {
 
   // --- rendering ------------------------------------------------------------
 
+  /** The steps for the current domain (base steps re-skinned by the choice). */
+  private steps(): WizardStep[] {
+    return resolveSteps(this.answers.domain);
+  }
+
   private renderStep(): void {
     clear(this.content);
-    const step = WIZARD_STEPS[this.stepIndex];
+    const steps = this.steps();
+    const step = steps[this.stepIndex];
 
     this.content.append(this.header(step));
     this.content.append(this.progress());
@@ -90,8 +98,9 @@ export class Wizard {
   }
 
   private progress(): HTMLElement {
+    const steps = this.steps();
     const wrap = el('div', { class: 'iso-wizard-progress' });
-    WIZARD_STEPS.forEach((s, i) => {
+    steps.forEach((s, i) => {
       const dot = el('span', {
         class: 'iso-progress-dot',
         title: s.title,
@@ -103,15 +112,38 @@ export class Wizard {
     wrap.append(
       el('span', {
         class: 'iso-progress-label',
-        text: `Step ${this.stepIndex + 1} of ${WIZARD_STEPS.length}`,
+        text: `Step ${this.stepIndex + 1} of ${steps.length}`,
       })
     );
     return wrap;
   }
 
   private stepBody(step: WizardStep): HTMLElement {
+    if (step.id === 'domain') return this.domainBody();
     if (!step.multi) return this.serviceBody(step);
     return this.multiBody(step);
+  }
+
+  // Step 0: pick the service domain (re-skins the rest of the wizard).
+  private domainBody(): HTMLElement {
+    const body = el('div', { class: 'iso-wizard-body iso-domain-body' });
+    for (const opt of DOMAIN_OPTIONS) {
+      const card = el('button', {
+        class: 'iso-domain-card',
+        attrs: { type: 'button', 'data-domain': opt.value },
+      });
+      if (this.answers.domain === opt.value) card.classList.add('is-selected');
+      card.append(
+        el('span', { class: 'iso-domain-card-title', text: opt.label }),
+        el('span', { class: 'iso-domain-card-blurb', text: opt.blurb })
+      );
+      card.addEventListener('click', () => {
+        this.answers.domain = opt.value;
+        this.renderStep(); // reflect selection immediately
+      });
+      body.append(card);
+    }
+    return body;
   }
 
   // Step 1: service name + description (stored on meta).
@@ -244,6 +276,25 @@ export class Wizard {
     del.title = 'Remove';
     wrap.append(del);
 
+    // Optional goal inputs (zone rows): feed the entity's userGoal / orgGoal.
+    if (step.askGoals) {
+      const goals = el('div', { class: 'iso-wizard-goals' });
+      const ug = el('input', {
+        class: 'iso-input iso-input-sm',
+        attrs: { type: 'text', placeholder: 'User goal (optional)' },
+      }) as HTMLInputElement;
+      ug.value = row.userGoal ?? '';
+      ug.addEventListener('input', () => { row.userGoal = ug.value; });
+      const og = el('input', {
+        class: 'iso-input iso-input-sm',
+        attrs: { type: 'text', placeholder: 'Org goal (optional)' },
+      }) as HTMLInputElement;
+      og.value = row.orgGoal ?? '';
+      og.addEventListener('input', () => { row.orgGoal = og.value; });
+      goals.append(ug, og);
+      wrap.append(goals);
+    }
+
     return wrap;
   }
 
@@ -256,7 +307,7 @@ export class Wizard {
     }, 'iso-btn iso-btn-sm');
     back.disabled = this.stepIndex === 0;
 
-    const isLast = this.stepIndex === WIZARD_STEPS.length - 1;
+    const isLast = this.stepIndex === this.steps().length - 1;
     const next = button(
       isLast ? 'Finish' : 'Next',
       () => (isLast ? this.finish() : this.advance()),
@@ -282,7 +333,7 @@ export class Wizard {
   // --- actions --------------------------------------------------------------
 
   private advance(): void {
-    if (this.stepIndex < WIZARD_STEPS.length - 1) {
+    if (this.stepIndex < this.steps().length - 1) {
       this.stepIndex++;
       this.renderStep();
     } else {
@@ -292,6 +343,11 @@ export class Wizard {
 
   private finish(): void {
     const doc = wizardBuildDocument(this.answers);
+    // Record the chosen domain on meta (preserved by the schema's unknown-field
+    // pass) so a re-opened map remembers how it was framed.
+    if (this.answers.domain) {
+      (doc.meta as Record<string, unknown>).serviceDomain = this.answers.domain;
+    }
     this.close();
     this.cb.onComplete(doc);
   }
@@ -350,6 +406,6 @@ function labelledInline(labelText: string, control: HTMLElement): HTMLElement {
 }
 
 function labelForStep(id: StepId): string {
-  const step = WIZARD_STEPS.find((s) => s.id === id);
+  const step = stepById(id);
   return step ? step.nameLabel : 'Item';
 }

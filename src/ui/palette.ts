@@ -5,13 +5,35 @@
 //
 // Categories = the seven entity types + 'prop' (per the AssetDef.category union).
 
-import { listByCategory, type AssetDef } from '../assets/library.ts';
+import { listByCategory, listAssets, type AssetDef } from '../assets/library.ts';
 import type { EntityType } from '../core/model.ts';
 import type { AppContext, PlacementRequest } from './context.ts';
 import { assetThumbnail } from './thumbnail.ts';
 import { el, clear } from './dom.ts';
 
-// Display order + labels for palette groups.
+/**
+ * Terrain & streetscape section: roads, rivers, organic regions, coastlines,
+ * plus the small street furniture that reads as landscape. These ids are pulled
+ * OUT of their normal category group into a dedicated section (region-organic /
+ * island-coastline are department/organisation category but belong here).
+ */
+const TERRAIN_IDS = new Set<string>([
+  'road-straight',
+  'road-corner',
+  'road-t',
+  'river-straight',
+  'river-bend',
+  'region-organic',
+  'island-coastline',
+  'tree-round',
+  'tree-conifer',
+  'planter',
+  'street-lamp',
+  'signpost',
+]);
+
+// Display order + labels for the category-driven palette groups. The terrain
+// section is injected separately (see renderList) since it spans categories.
 const GROUPS: { category: AssetDef['category']; label: string }[] = [
   { category: 'organisation', label: 'Organisations' },
   { category: 'department', label: 'Departments' },
@@ -22,6 +44,8 @@ const GROUPS: { category: AssetDef['category']; label: string }[] = [
   { category: 'annotation', label: 'Annotations' },
   { category: 'prop', label: 'Props & scenery' },
 ];
+
+const TERRAIN_LABEL = 'Terrain & streetscape';
 
 // Human-friendly names for asset ids (fallback: title-cased id).
 function assetName(id: string): string {
@@ -81,23 +105,20 @@ export class Palette {
     clear(this.listHost);
     const q = this.filter;
 
+    // Dedicated terrain & streetscape section (spans categories), shown first.
+    const terrain = listAssets().filter(
+      (a) => TERRAIN_IDS.has(a.id) && matchesQuery(a, TERRAIN_LABEL, q)
+    );
+    if (terrain.length > 0) {
+      this.appendSection(TERRAIN_LABEL, terrain);
+    }
+
     for (const group of GROUPS) {
-      const items = listByCategory(group.category).filter((a) =>
-        matches(a, group, q)
+      const items = listByCategory(group.category).filter(
+        (a) => !TERRAIN_IDS.has(a.id) && matches(a, group, q)
       );
       if (items.length === 0) continue;
-
-      const section = el('div', { class: 'iso-palette-group' });
-      section.append(
-        el('h3', { class: 'iso-palette-group-title', text: group.label })
-      );
-
-      const grid = el('div', { class: 'iso-palette-grid' });
-      for (const asset of items) {
-        grid.append(this.renderItem(asset, group.category));
-      }
-      section.append(grid);
-      this.listHost.append(section);
+      this.appendSection(group.label, items);
     }
 
     if (this.listHost.childElementCount === 0) {
@@ -108,7 +129,17 @@ export class Palette {
     this.reflectActive();
   }
 
-  private renderItem(asset: AssetDef, category: AssetDef['category']): HTMLElement {
+  /** Append one titled section with a grid of asset items. */
+  private appendSection(label: string, items: AssetDef[]): void {
+    const section = el('div', { class: 'iso-palette-group' });
+    section.append(el('h3', { class: 'iso-palette-group-title', text: label }));
+    const grid = el('div', { class: 'iso-palette-grid' });
+    for (const asset of items) grid.append(this.renderItem(asset));
+    section.append(grid);
+    this.listHost.append(section);
+  }
+
+  private renderItem(asset: AssetDef): HTMLElement {
     const name = assetName(asset.id);
     const item = el('button', {
       class: 'iso-palette-item',
@@ -127,7 +158,7 @@ export class Palette {
     item.addEventListener('click', () => {
       const req: PlacementRequest = {
         assetId: asset.id,
-        entityType: entityTypeFor(category),
+        entityType: entityTypeFor(asset.category),
         assetLabel: name,
       };
       // Toggle: clicking the active item again cancels placement.
@@ -158,7 +189,12 @@ function matches(
   group: { category: AssetDef['category']; label: string },
   q: string
 ): boolean {
+  return matchesQuery(asset, group.label, q);
+}
+
+/** True if the asset matches the search query, given its section's label. */
+function matchesQuery(asset: AssetDef, sectionLabel: string, q: string): boolean {
   if (!q) return true;
-  const hay = `${asset.id} ${assetName(asset.id)} ${group.label} ${asset.category}`.toLowerCase();
+  const hay = `${asset.id} ${assetName(asset.id)} ${sectionLabel} ${asset.category}`.toLowerCase();
   return hay.includes(q);
 }

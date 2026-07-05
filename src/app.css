@@ -617,6 +617,11 @@ body {
 .iso-tooltip-desc {
   color: #d7d7d7;
 }
+.iso-tooltip-goal {
+  color: #f0c4b2;
+  font-size: 11px;
+  line-height: 1.35;
+}
 
 /* Toast (io availability / placement hints) */
 .iso-toast {
@@ -743,5 +748,62 @@ body {
 }
 .iso-wizard-nav {
   display: flex;
+  gap: 6px;
+}
+
+/* ── Wave 2: domain step, wizard goals, rotate control ───────────────────── */
+.iso-domain-body {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.iso-domain-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  padding: 12px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 9px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.iso-domain-card:hover {
+  border-color: var(--muted-2);
+}
+.iso-domain-card.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.iso-domain-card-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--ink);
+}
+.iso-domain-card-blurb {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+/* Wizard per-row goal inputs */
+.iso-wizard-goals {
+  display: flex;
+  gap: 6px;
+  flex-basis: 100%;
+  margin-top: 4px;
+}
+.iso-input-sm {
+  font-size: 11px;
+  padding: 4px 6px;
+}
+
+/* Rotate control in the properties panel */
+.iso-rotate-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   gap: 6px;
 }

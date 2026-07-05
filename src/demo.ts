@@ -25,7 +25,17 @@ export function buildDemoScene(): SceneDocument {
       label: 'Acme Public Services',
       description: 'The whole organisation footprint.',
       placement: { mode: 'grid', x: -1, y: -1, footprint: { w: 10, d: 8 } },
-      asset: { symbol: 'department-zone', params: { w: 10, d: 8, label: 'ACME PUBLIC SERVICES' } },
+      // Plaque params on the org zone: numbered badge + user-group glyph row.
+      asset: {
+        symbol: 'department-zone',
+        params: {
+          w: 10,
+          d: 8,
+          label: 'ACME PUBLIC SERVICES',
+          number: 1,
+          userGroups: 'Residents, Staff, Partners',
+        },
+      },
     }),
 
     // Two department zones inside the org.
@@ -102,6 +112,67 @@ export function buildDemoScene(): SceneDocument {
       description: 'Field delivery vehicle.',
       parentId: 'dept-ops',
       placement: { mode: 'grid', x: 2, y: 4, footprint: { w: 2, d: 1 } },
+      asset: { symbol: 'van' },
+    }),
+
+    // ── Wave 2 streetscape ────────────────────────────────────────────────
+    // A short road along the street edge (below the org plate). Roads are
+    // ground assets and tile edge-to-edge; a straight run reads as the kerb.
+    ent({
+      id: 'road-1',
+      type: 'physical-infra',
+      label: 'Street',
+      placement: { mode: 'grid', x: 0, y: 7, footprint: { w: 1, d: 1 } },
+      asset: { symbol: 'road-straight' },
+    }),
+    ent({
+      id: 'road-2',
+      type: 'physical-infra',
+      label: 'Street',
+      placement: { mode: 'grid', x: 1, y: 7, footprint: { w: 1, d: 1 } },
+      asset: { symbol: 'road-straight' },
+    }),
+    ent({
+      id: 'road-3',
+      type: 'physical-infra',
+      label: 'Street',
+      placement: { mode: 'grid', x: 2, y: 7, footprint: { w: 1, d: 1 } },
+      asset: { symbol: 'road-straight' },
+    }),
+    ent({
+      id: 'road-4',
+      type: 'physical-infra',
+      label: 'Street',
+      placement: { mode: 'grid', x: 3, y: 7, footprint: { w: 1, d: 1 } },
+      asset: { symbol: 'road-straight' },
+    }),
+
+    // A shopfront facing the street, with café seating out front.
+    ent({
+      id: 'shop-1',
+      type: 'physical-infra',
+      label: 'Corner Café',
+      description: 'High-street shopfront with an awning.',
+      placement: { mode: 'grid', x: 5, y: 6, footprint: { w: 2, d: 1 } },
+      asset: { symbol: 'shop-front', params: { signage: 'CORNER CAFE' } },
+    }),
+    ent({
+      id: 'cafe-1',
+      type: 'physical-infra',
+      label: 'Café seating',
+      description: 'Outdoor tables by the shopfront.',
+      placement: { mode: 'grid', x: 7, y: 6, footprint: { w: 1, d: 1 } },
+      asset: { symbol: 'cafe-seating' },
+    }),
+
+    // A rotated van parked along the street — rotation 1 renders the van's
+    // mirrored facing (van declares orientations: 2). Sits on its own tile.
+    ent({
+      id: 'van-street',
+      type: 'physical-infra',
+      label: 'Parked Van',
+      description: 'Kerbside van, rotated facing.',
+      placement: { mode: 'grid', x: 5, y: 8, footprint: { w: 2, d: 1 }, rotation: 1 },
       asset: { symbol: 'van' },
     }),
 

@@ -5,8 +5,10 @@
 // owned here: a ghost follows the cursor and a canvas click commits PlaceEntity.
 
 import type { Camera, Entity, Placement, SceneDocument } from './core/model.ts';
-import { byId, semanticRelatives } from './core/model.ts';
-import { History } from './core/commands.ts';
+import { byId } from './core/model.ts';
+import { History, RotateEntity } from './core/commands.ts';
+import { planRotation } from './render/rotation.ts';
+import { presentSpotlight } from './render/spotlight.ts';
 import { renderScene, type ViewState } from './render/renderer.ts';
 import { defaultCamera, screenToWorld, viewBoxAttr, viewBoxFor } from './render/camera.ts';
 import {
@@ -21,7 +23,8 @@ import { LayersPanel } from './ui/layersPanel.ts';
 import { PropertiesPanel } from './ui/propertiesPanel.ts';
 import { buildToolbar, type ToolbarHandles } from './ui/toolbar.ts';
 import { Wizard } from './ui/wizard.ts';
-import { el, escapeHtml } from './ui/dom.ts';
+import { el, collapsibleColumn } from './ui/dom.ts';
+import { tooltipHtml } from './ui/tooltip.ts';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 
@@ -36,6 +39,7 @@ export class App implements AppContext {
   private mode: Mode = 'edit';
   private selection: string | undefined;
   private spotlight: string | undefined;
+  private spotlightLayerId: string | undefined;
   private hoverId: string | undefined;
   private camera: Camera;
   private ghost: Ghost | undefined;
@@ -95,6 +99,10 @@ export class App implements AppContext {
 
   selectedId(): string | undefined {
     return this.selection;
+  }
+
+  getMode(): Mode {
+    return this.mode;
   }
 
   select(id: string | undefined): void {
@@ -159,7 +167,7 @@ export class App implements AppContext {
     const main = el('div', { class: 'iso-main' });
 
     this.palette = new Palette(this);
-    const paletteCol = this.collapsibleColumn('palette-col', this.palette.root, 'left');
+    const paletteCol = collapsibleColumn('palette-col', this.palette.root, 'left');
 
     const stage = el('div', { class: 'iso-stage' });
     this.svg = document.createElementNS(SVGNS, 'svg') as SVGSVGElement;
@@ -177,7 +185,7 @@ export class App implements AppContext {
 
     const layers = new LayersPanel(this);
     const props = new PropertiesPanel(this);
-    const rightCol = this.collapsibleColumn(
+    const rightCol = collapsibleColumn(
       'panels-col',
       el('div', { class: 'iso-right-stack' }, [props.root, layers.root]),
       'right'
@@ -199,28 +207,6 @@ export class App implements AppContext {
     this.controller?.dispose();
     this.buildDom();
     this.controller = new InteractionController(this.svg, this.interactionHost());
-  }
-
-  private collapsibleColumn(
-    cls: string,
-    content: HTMLElement,
-    side: 'left' | 'right'
-  ): HTMLElement {
-    const col = el('div', { class: `iso-col ${cls}` });
-    const toggle = document.createElement('button');
-    toggle.type = 'button';
-    toggle.className = 'iso-col-toggle';
-    toggle.title = side === 'left' ? 'Collapse palette' : 'Collapse panels';
-    toggle.textContent = side === 'left' ? '‹' : '›';
-    toggle.addEventListener('click', () => {
-      const collapsed = col.classList.toggle('is-collapsed');
-      toggle.textContent = collapsed
-        ? side === 'left' ? '›' : '‹'
-        : side === 'left' ? '‹' : '›';
-    });
-    if (side === 'left') col.append(content, toggle);
-    else col.append(toggle, content);
-    return col;
   }
 
   private async loadDemo(): Promise<void> {
@@ -266,9 +252,12 @@ export class App implements AppContext {
       showGrid: this.mode === 'edit',
     };
 
-    if (this.mode === 'present' && this.spotlight) {
-      const rels = semanticRelatives(this.history.document, this.spotlight);
-      view.spotlightIds = new Set(rels.map((e) => e.id));
+    if (this.mode === 'present') {
+      // Layer spotlight (custom-layer group) wins over a single-entity spotlight.
+      view.spotlightIds = presentSpotlight(this.history.document, {
+        layerId: this.spotlightLayerId,
+        entityId: this.spotlight,
+      });
     }
 
     renderScene(this.sceneRoot, this.renderDoc(), view);
@@ -321,6 +310,7 @@ export class App implements AppContext {
         this.render();
       },
       onSpotlight: (id) => {
+        this.spotlightLayerId = undefined; // an entity click supersedes a layer spotlight
         this.spotlight = id === this.spotlight ? undefined : id;
         this.render();
       },
@@ -360,14 +350,7 @@ export class App implements AppContext {
       this.tooltip.hidden = true;
       return;
     }
-    const parts = [
-      `<strong>${escapeHtml(entity.label)}</strong>`,
-      `<span class="iso-tooltip-type">${escapeHtml(entity.type)}</span>`,
-    ];
-    if (entity.description) {
-      parts.push(`<span class="iso-tooltip-desc">${escapeHtml(entity.description)}</span>`);
-    }
-    this.tooltip.innerHTML = parts.join('');
+    this.tooltip.innerHTML = tooltipHtml(entity);
     const rect = this.svg.getBoundingClientRect();
     this.tooltip.style.left = `${clientX - rect.left + 14}px`;
     this.tooltip.style.top = `${clientY - rect.top + 14}px`;
@@ -389,6 +372,7 @@ export class App implements AppContext {
     this.mode = this.mode === 'edit' ? 'present' : 'edit';
     this.selection = undefined;
     this.spotlight = undefined;
+    this.spotlightLayerId = undefined;
     this.tooltip.hidden = true;
     this.cancelPlacement();
     this.notifySelection();
@@ -454,12 +438,66 @@ export class App implements AppContext {
       if (!typing) {
         this.selection = undefined;
         this.spotlight = undefined;
+        this.spotlightLayerId = undefined;
         this.tooltip.hidden = true;
         this.notifySelection();
         this.render();
       }
     }
+    // R rotates the selected entity (edit mode only, not while typing).
+    if (
+      !typing &&
+      !meta &&
+      this.mode === 'edit' &&
+      (evt.key === 'r' || evt.key === 'R')
+    ) {
+      if (this.selection && !this.placement.active) {
+        evt.preventDefault();
+        this.rotateSelected();
+      }
+    }
   };
+
+  /**
+   * Rotate the selected entity one quarter-turn clockwise (0→1→2→3→0).
+   * No-op for fixed assets (orientations === 1 or absent). If the resulting
+   * effective footprint would overlap another grid entity, the rotation is
+   * rejected with the same toast + shake feedback as a bad drop.
+   */
+  rotateSelected(): void {
+    const id = this.selection;
+    if (!id) return;
+    const entity = byId(this.history.document, id);
+    if (!entity) return;
+
+    const plan = planRotation(this.history.document, entity);
+    if (!plan) return; // fixed asset — nothing to rotate
+    if (plan.collides) {
+      // Same feedback as a bad drop: toast + red shake on the entity.
+      this.showToast('Cannot rotate here — would overlap another footprint.');
+      this.markRejected(entity.id);
+      return;
+    }
+    this.history.execute(
+      new RotateEntity({ entityId: entity.id, from: plan.from, to: plan.to })
+    );
+  }
+
+  /**
+   * Present-mode: spotlight an entire custom layer's entities (clicking a layer
+   * name in the layers panel). Toggles off if the same layer is re-clicked.
+   */
+  spotlightLayer(layerId: string): void {
+    if (this.mode !== 'present') return;
+    if (this.spotlightLayerId === layerId) {
+      this.spotlightLayerId = undefined;
+      this.spotlight = undefined;
+    } else {
+      this.spotlightLayerId = layerId;
+      this.spotlight = undefined;
+    }
+    this.render();
+  }
 
   /** Open the interview wizard (used at startup for an empty scene). */
   openWizard(): void {

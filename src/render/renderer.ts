@@ -43,7 +43,7 @@ function round(v: number): number {
 /** SVG fragment for one entity (its <g> wrapper + stamped asset). */
 function renderEntity(entity: Entity, view: ViewState): string {
   const def = getAsset(entity.asset.symbol);
-  const fragment = def ? def.render(entity.asset.params) : missingGlyph();
+  const fragment = def ? def.render(renderParams(entity)) : missingGlyph();
 
   const { x, y } = entityOrigin(entity);
 
@@ -64,6 +64,19 @@ function renderEntity(entity: Entity, view: ViewState): string {
   }
 
   return `<g ${attrs.join(' ')}>${fragment}</g>`;
+}
+
+/**
+ * The params bag handed to an asset's render(), with the placement's rotation
+ * injected as the reserved `orientation` key (0–3). Entities never author an
+ * `orientation` param directly — it is derived from placement.rotation so a
+ * single source of truth (the placement) drives both footprint and facing.
+ * Absent rotation ⇒ no orientation key ⇒ unchanged (backward-compatible) output.
+ */
+function renderParams(entity: Entity): Record<string, unknown> | undefined {
+  const rotation = entity.placement.rotation;
+  if (rotation === undefined) return entity.asset.params;
+  return { ...(entity.asset.params ?? {}), orientation: rotation };
 }
 
 /** Fallback glyph when an asset id is unknown (should not happen in practice). */

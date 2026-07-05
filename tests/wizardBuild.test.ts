@@ -12,8 +12,11 @@ const NOW = '2026-07-05T00:00:00.000Z';
 /** A scripted set of answers exercising every step + parent chain. */
 function scriptedAnswers(): WizardAnswers {
   const a = emptyAnswers();
+  a.domain = 'public-service';
   a.service = { name: 'Bin Collection', description: 'Kerbside waste service' };
-  a.organisations = [{ name: 'City Council' }];
+  a.organisations = [
+    { name: 'City Council', userGoal: 'clean streets', orgGoal: 'lawful, on-budget' },
+  ];
   a.departments = [
     { name: 'Waste Ops', parentRef: '0' }, // → org index 0
     { name: 'Digital', parentRef: '0' },
@@ -162,6 +165,39 @@ describe('wizardBuildDocument', () => {
     const org = doc.entities.find((e) => e.type === 'organisation')!;
     expect(good.parentId).toBe(org.id);
     expect(orphan.parentId).toBeUndefined();
+  });
+
+  it('attaches userGoal / orgGoal from zone rows to the produced entity', () => {
+    const doc = wizardBuildDocument(scriptedAnswers(), {
+      idGen: sequentialIdGen(),
+      now: NOW,
+    });
+    const org = doc.entities.find((e) => e.type === 'organisation')!;
+    expect(org.userGoal).toBe('clean streets');
+    expect(org.orgGoal).toBe('lawful, on-budget');
+    // A department with no goals set carries neither field.
+    const dept = doc.entities.find((e) => e.label === 'Digital')!;
+    expect(dept.userGoal).toBeUndefined();
+    expect(dept.orgGoal).toBeUndefined();
+  });
+
+  it('ignores blank/whitespace-only goals (no field written)', () => {
+    const a = emptyAnswers();
+    a.service = { name: 'S' };
+    a.organisations = [{ name: 'Org', userGoal: '   ', orgGoal: '' }];
+    const doc = wizardBuildDocument(a, { idGen: sequentialIdGen(), now: NOW });
+    const org = doc.entities.find((e) => e.type === 'organisation')!;
+    expect(org.userGoal).toBeUndefined();
+    expect(org.orgGoal).toBeUndefined();
+  });
+
+  it('builds without a domain (domain is optional / generic default)', () => {
+    const a = emptyAnswers();
+    a.service = { name: 'Generic' };
+    a.organisations = [{ name: 'Org' }];
+    expect(a.domain).toBeUndefined();
+    const doc = wizardBuildDocument(a, { idGen: sequentialIdGen(), now: NOW });
+    expect(doc.entities.find((e) => e.type === 'organisation')).toBeDefined();
   });
 
   it('clamps headcount to 1..5', () => {

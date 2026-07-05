@@ -154,7 +154,8 @@ export function validateDocument(input: unknown): ValidateResult {
     });
   }
 
-  // Overlap warnings (grid entities only) — never errors.
+  // Overlap warnings (grid entities only) — never errors. Legitimate nesting
+  // (an entity inside its ancestor's larger footprint) is NOT warned.
   if (Array.isArray(raw.entities)) {
     collectOverlapWarnings(raw.entities, warnings);
   }
@@ -346,6 +347,18 @@ function collectOverlapWarnings(
   rawEntities: unknown[],
   warnings: string[]
 ): void {
+  // parentId chain, so ancestor⊃descendant nesting can be excluded from the
+  // overlap check — a child sitting inside its parent's (or grandparent's)
+  // larger footprint is legitimate, not a collision.
+  const parentOf = new Map<string, string | undefined>();
+  for (const ent of rawEntities) {
+    if (!isObject(ent) || typeof ent.id !== 'string') continue;
+    parentOf.set(
+      ent.id,
+      typeof ent.parentId === 'string' ? ent.parentId : undefined
+    );
+  }
+
   const grid: { id: string; placement: Placement }[] = [];
   for (const ent of rawEntities) {
     if (!isObject(ent)) continue;
@@ -365,6 +378,7 @@ function collectOverlapWarnings(
   }
   for (let a = 0; a < grid.length; a++) {
     for (let b = a + 1; b < grid.length; b++) {
+      if (isAncestorPair(grid[a].id, grid[b].id, parentOf)) continue;
       if (footprintsOverlap(grid[a].placement, grid[b].placement)) {
         warnings.push(
           `grid footprints overlap: "${grid[a].id}" and "${grid[b].id}"`
@@ -372,6 +386,34 @@ function collectOverlapWarnings(
       }
     }
   }
+}
+
+/**
+ * True if one of the two ids is a (transitive) parent of the other — i.e. their
+ * overlap is legitimate nesting. Cycle-safe via a per-walk visited set.
+ */
+function isAncestorPair(
+  x: string,
+  y: string,
+  parentOf: Map<string, string | undefined>
+): boolean {
+  return isAncestorOf(x, y, parentOf) || isAncestorOf(y, x, parentOf);
+}
+
+/** True if `ancestor` appears in `descendant`'s parentId chain. */
+function isAncestorOf(
+  ancestor: string,
+  descendant: string,
+  parentOf: Map<string, string | undefined>
+): boolean {
+  const seen = new Set<string>();
+  let cur = parentOf.get(descendant);
+  while (cur !== undefined && !seen.has(cur)) {
+    if (cur === ancestor) return true;
+    seen.add(cur);
+    cur = parentOf.get(cur);
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------
