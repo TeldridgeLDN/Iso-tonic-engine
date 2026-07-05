@@ -39,7 +39,7 @@ function num(v: unknown, dflt: number): number {
 
 // The two road entry/exit pairs (by axis). Orientation selects which pair.
 // A "straight" connects one pair; corners/T pick from all four midpoints.
-const ROAD_HALF = 8; // half the carriageway width in px (~half a tile wide overall)
+const ROAD_HALF = 16; // half the carriageway width in px (~32px overall — tree-canopy scale)
 
 /** Two parallel kerb lines + faint centre dashes between endpoints a..b. */
 function roadBand(a: Pt, b: Pt, dashes = true): string {
@@ -121,10 +121,21 @@ export function roadCorner(params?: Record<string, unknown>): string {
   const ring = [mNE, mSE, mSW, mNW];
   const a = ring[o % 4];
   const b = ring[(o + 1) % 4];
+  // Diamond vertex shared by the two connected edges (the corner being turned).
+  // Pull the spine's control toward it so the wide carriageway hugs the turn
+  // instead of ballooning outside the tile (tileC alone bulges at ROAD_HALF 16).
+  const verts: Pt[] = [
+    { x: HALF_W, y: HALF_H }, // between NE & SE
+    { x: 0, y: HALF_H * 2 }, // between SE & SW
+    { x: -HALF_W, y: HALF_H }, // between SW & NW
+    { x: 0, y: 0 }, // between NW & NE
+  ];
+  const v = verts[o % 4];
+  const ctrl: Pt = { x: (tileC.x + v.x) / 2, y: (tileC.y + v.y) / 2 };
   return group(0, 0, [
-    curvedBand(a, tileC, b, ROAD_HALF, STROKE, false),
+    curvedBand(a, ctrl, b, ROAD_HALF, STROKE, false),
     // centre dashes along the arc
-    dashArc(a, tileC, b),
+    dashArc(a, ctrl, b),
   ]);
 }
 
