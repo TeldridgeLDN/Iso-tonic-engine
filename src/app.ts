@@ -1,21 +1,27 @@
-// App shell: state + single subscribe→re-render pipeline. Wires the History,
-// camera, renderer and interaction controller together, and builds a minimal
-// toolbar (Phase D extends it) + hover tooltip.
+// App shell: three-pane layout (palette · canvas · panels), state + single
+// subscribe→re-render pipeline. Wires History, camera, renderer, interaction
+// controller, the Phase D panels (palette / layers / properties / figurine),
+// the toolbar, and the interview wizard. Placement mode (from the palette) is
+// owned here: a ghost follows the cursor and a canvas click commits PlaceEntity.
 
 import type { Camera, Entity, Placement, SceneDocument } from './core/model.ts';
 import { byId, semanticRelatives } from './core/model.ts';
 import { History } from './core/commands.ts';
 import { renderScene, type ViewState } from './render/renderer.ts';
-import {
-  defaultCamera,
-  viewBoxAttr,
-  viewBoxFor,
-} from './render/camera.ts';
+import { defaultCamera, screenToWorld, viewBoxAttr, viewBoxFor } from './render/camera.ts';
 import {
   InteractionController,
   type InteractionHost,
   type Mode,
 } from './render/interactions.ts';
+import type { AppContext, PlacementRequest } from './ui/context.ts';
+import { PlacementController } from './ui/placement.ts';
+import { Palette } from './ui/palette.ts';
+import { LayersPanel } from './ui/layersPanel.ts';
+import { PropertiesPanel } from './ui/propertiesPanel.ts';
+import { buildToolbar, type ToolbarHandles } from './ui/toolbar.ts';
+import { Wizard } from './ui/wizard.ts';
+import { el, escapeHtml } from './ui/dom.ts';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 
@@ -25,30 +31,44 @@ interface Ghost {
   rejected: boolean;
 }
 
-export class App {
-  readonly history: History;
+export class App implements AppContext {
+  history: History;
   private mode: Mode = 'edit';
   private selection: string | undefined;
   private spotlight: string | undefined;
   private hoverId: string | undefined;
   private camera: Camera;
   private ghost: Ghost | undefined;
+  private placement!: PlacementController;
 
   private svg!: SVGSVGElement;
   private sceneRoot!: SVGGElement;
   private tooltip!: HTMLDivElement;
-  private zoomLabel!: HTMLSpanElement;
-  private undoBtn!: HTMLButtonElement;
-  private redoBtn!: HTMLButtonElement;
-  private modeBtn!: HTMLButtonElement;
+  private toast!: HTMLDivElement;
+  private toolbar!: ToolbarHandles;
   private controller!: InteractionController;
   private cameraSyncTimer: number | undefined;
+  private toastTimer: number | undefined;
   private readonly root: HTMLElement;
+
+  private palette!: Palette;
+  private wizard!: Wizard;
+  private readonly selectionListeners: (() => void)[] = [];
 
   constructor(root: HTMLElement, doc: SceneDocument) {
     this.root = root;
     this.history = new History(doc);
     this.camera = doc.camera ? { ...doc.camera } : defaultCamera();
+    this.placement = this.makePlacementController();
+  }
+
+  private makePlacementController(): PlacementController {
+    return new PlacementController({
+      history: this.history,
+      clientToWorld: (cx, cy) => this.clientToWorld(cx, cy),
+      notify: (m) => this.showToast(m),
+      select: (id) => this.select(id),
+    });
   }
 
   mount(): void {
@@ -57,10 +77,66 @@ export class App {
 
     this.history.subscribe(() => this.render());
     window.addEventListener('keydown', this.onKeyDown);
-    window.addEventListener('resize', () => this.render());
+    window.addEventListener('resize', this.onResize);
 
-    // Fit the camera to content on first mount for a friendly initial view.
     this.fitToContent();
+    this.render();
+  }
+
+  // --- AppContext implementation -----------------------------------------
+
+  document(): SceneDocument {
+    return this.history.document;
+  }
+
+  subscribe(listener: () => void): () => void {
+    return this.history.subscribe(() => listener());
+  }
+
+  selectedId(): string | undefined {
+    return this.selection;
+  }
+
+  select(id: string | undefined): void {
+    this.selection = id;
+    this.notifySelection();
+    this.render();
+  }
+
+  onSelectionChange(listener: () => void): () => void {
+    this.selectionListeners.push(listener);
+    return () => {
+      const i = this.selectionListeners.indexOf(listener);
+      if (i >= 0) this.selectionListeners.splice(i, 1);
+    };
+  }
+
+  beginPlacement(req: PlacementRequest): void {
+    this.placement.begin(req);
+    this.svg.classList.add('is-placing');
+  }
+
+  cancelPlacement(): void {
+    this.placement.cancel();
+    this.svg?.classList.remove('is-placing');
+    this.palette?.clearActive();
+    this.render();
+  }
+
+  replaceDocument(doc: SceneDocument): void {
+    this.history = new History(doc);
+    this.camera = doc.camera ? { ...doc.camera } : defaultCamera();
+    this.selection = undefined;
+    this.spotlight = undefined;
+    this.ghost = undefined;
+    this.placement = this.makePlacementController();
+    // Rewire the document-change subscription for re-render + panels.
+    this.history.subscribe(() => this.render());
+    // Panels subscribe through subscribe(); rebuild the whole shell so their
+    // closures point at the new history.
+    this.rebuildShell();
+    this.fitToContent();
+    this.notifySelection();
     this.render();
   }
 
@@ -70,72 +146,115 @@ export class App {
     this.root.innerHTML = '';
     this.root.classList.add('iso-app');
 
-    // Toolbar
-    const bar = document.createElement('header');
-    bar.className = 'iso-toolbar';
+    this.toolbar = buildToolbar({
+      history: this.history,
+      document: () => this.history.document,
+      onNewMap: () => this.wizard.open(),
+      onOpened: (doc) => this.replaceDocument(doc),
+      toggleMode: () => this.toggleMode(),
+      notify: (m) => this.showToast(m),
+    });
 
-    const title = document.createElement('span');
-    title.className = 'iso-title';
-    title.textContent = 'Iso-tonic Engine';
+    // Three-pane layout host.
+    const main = el('div', { class: 'iso-main' });
 
-    this.modeBtn = button('Present mode', () => this.toggleMode());
-    this.modeBtn.classList.add('iso-mode-btn');
+    this.palette = new Palette(this);
+    const paletteCol = this.collapsibleColumn('palette-col', this.palette.root, 'left');
 
-    this.undoBtn = button('Undo', () => this.history.undo());
-    this.redoBtn = button('Redo', () => this.history.redo());
-
-    this.zoomLabel = document.createElement('span');
-    this.zoomLabel.className = 'iso-zoom';
-
-    const spacer = document.createElement('span');
-    spacer.className = 'iso-spacer';
-
-    bar.append(
-      title,
-      spacer,
-      this.zoomLabel,
-      this.undoBtn,
-      this.redoBtn,
-      this.modeBtn
-    );
-
-    // Canvas svg
-    const stage = document.createElement('div');
-    stage.className = 'iso-stage';
-
+    const stage = el('div', { class: 'iso-stage' });
     this.svg = document.createElementNS(SVGNS, 'svg') as SVGSVGElement;
     this.svg.setAttribute('class', 'iso-canvas');
     this.svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-
     this.sceneRoot = document.createElementNS(SVGNS, 'g') as SVGGElement;
     this.sceneRoot.setAttribute('data-scene-root', 'true');
     this.svg.appendChild(this.sceneRoot);
 
-    this.tooltip = document.createElement('div');
-    this.tooltip.className = 'iso-tooltip';
+    this.tooltip = el('div', { class: 'iso-tooltip' }) as HTMLDivElement;
     this.tooltip.hidden = true;
+    this.toast = el('div', { class: 'iso-toast' }) as HTMLDivElement;
+    this.toast.hidden = true;
+    stage.append(this.svg, this.tooltip, this.toast);
 
-    stage.append(this.svg, this.tooltip);
-    this.root.append(bar, stage);
+    const layers = new LayersPanel(this);
+    const props = new PropertiesPanel(this);
+    const rightCol = this.collapsibleColumn(
+      'panels-col',
+      el('div', { class: 'iso-right-stack' }, [props.root, layers.root]),
+      'right'
+    );
+
+    main.append(paletteCol, stage, rightCol);
+    this.root.append(this.toolbar.root, main);
+
+    // Wizard modal (created once, opened on demand).
+    this.wizard = new Wizard({
+      onComplete: (doc) => this.replaceDocument(doc),
+      onBlank: (doc) => this.replaceDocument(doc),
+      onLoadDemo: () => this.loadDemo(),
+    });
+  }
+
+  /** Rebuild the whole shell DOM (used after replaceDocument). */
+  private rebuildShell(): void {
+    this.controller?.dispose();
+    this.buildDom();
+    this.controller = new InteractionController(this.svg, this.interactionHost());
+  }
+
+  private collapsibleColumn(
+    cls: string,
+    content: HTMLElement,
+    side: 'left' | 'right'
+  ): HTMLElement {
+    const col = el('div', { class: `iso-col ${cls}` });
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'iso-col-toggle';
+    toggle.title = side === 'left' ? 'Collapse palette' : 'Collapse panels';
+    toggle.textContent = side === 'left' ? '‹' : '›';
+    toggle.addEventListener('click', () => {
+      const collapsed = col.classList.toggle('is-collapsed');
+      toggle.textContent = collapsed
+        ? side === 'left' ? '›' : '‹'
+        : side === 'left' ? '‹' : '›';
+    });
+    if (side === 'left') col.append(content, toggle);
+    else col.append(toggle, content);
+    return col;
+  }
+
+  private async loadDemo(): Promise<void> {
+    const { buildDemoScene } = await import('./demo.ts');
+    this.replaceDocument(buildDemoScene());
   }
 
   // --- render pipeline ----------------------------------------------------
 
-  /** The document as it should currently render — with any live ghost applied. */
+  /** The document as it should currently render — with any live ghost/preview. */
   private renderDoc(): SceneDocument {
     const doc = this.history.document;
-    if (!this.ghost) return doc;
-    const g = this.ghost;
-    return {
-      ...doc,
-      entities: doc.entities.map((e) =>
-        e.id === g.id ? ({ ...e, placement: g.placement } as Entity) : e
-      ),
-    };
+    // Drag ghost of an existing entity.
+    if (this.ghost) {
+      const g = this.ghost;
+      return {
+        ...doc,
+        entities: doc.entities.map((e) =>
+          e.id === g.id ? ({ ...e, placement: g.placement } as Entity) : e
+        ),
+      };
+    }
+    // Placement-mode preview: append a transient ghost entity.
+    const preview = this.placement.currentPreview();
+    if (preview) {
+      return {
+        ...doc,
+        entities: [...doc.entities, { ...preview.entity, placement: preview.placement }],
+      };
+    }
+    return doc;
   }
 
   private render(): void {
-    // Sync viewBox to camera.
     const rect = this.svg.getBoundingClientRect();
     const w = rect.width || 800;
     const h = rect.height || 600;
@@ -152,19 +271,31 @@ export class App {
       view.spotlightIds = new Set(rels.map((e) => e.id));
     }
 
-    // A rejected ghost gets a red tint via a data attribute post-render.
     renderScene(this.sceneRoot, this.renderDoc(), view);
+
     if (this.ghost?.rejected) {
-      const el = this.sceneRoot.querySelector(`[data-entity-id="${this.ghost.id}"]`);
-      el?.setAttribute('data-rejected', 'true');
+      this.markRejected(this.ghost.id);
+    }
+    const preview = this.placement.currentPreview();
+    if (preview) {
+      const el2 = this.sceneRoot.querySelector(
+        `[data-entity-id="${preview.entity.id}"]`
+      );
+      el2?.setAttribute('data-ghost', 'true');
+      if (preview.rejected) el2?.setAttribute('data-rejected', 'true');
     }
 
-    // Toolbar reactive state.
-    this.undoBtn.disabled = !this.history.canUndo();
-    this.redoBtn.disabled = !this.history.canRedo();
-    this.zoomLabel.textContent = `${Math.round(this.camera.zoom * 100)}%`;
-    this.modeBtn.textContent = this.mode === 'edit' ? 'Present mode' : 'Edit mode';
-    this.modeBtn.classList.toggle('is-present', this.mode === 'present');
+    this.toolbar.refresh({
+      canUndo: this.history.canUndo(),
+      canRedo: this.history.canRedo(),
+      zoomPct: Math.round(this.camera.zoom * 100),
+      mode: this.mode,
+    });
+  }
+
+  private markRejected(id: string): void {
+    const el2 = this.sceneRoot.querySelector(`[data-entity-id="${id}"]`);
+    el2?.setAttribute('data-rejected', 'true');
   }
 
   // --- interaction host ---------------------------------------------------
@@ -180,32 +311,52 @@ export class App {
         this.scheduleCameraSync();
       },
       onSelect: (id) => {
+        // In placement mode, a canvas click commits a placement instead.
+        if (this.placement.active) {
+          this.placement.commit();
+          return;
+        }
         this.selection = id;
+        this.notifySelection();
         this.render();
       },
       onSpotlight: (id) => {
-        // Clicking the already-focused entity, or the background, releases.
         this.spotlight = id === this.spotlight ? undefined : id;
         this.render();
       },
       onHover: (id, clientX, clientY) => {
         this.hoverId = id;
+        if (this.placement.active) {
+          this.placement.updatePreview(clientX, clientY);
+        }
         this.updateTooltip(id, clientX, clientY);
         this.render();
       },
       requestRender: () => this.render(),
       setGhost: (id, placement, rejected) => {
-        this.ghost =
-          id && placement ? { id, placement, rejected } : undefined;
+        this.ghost = id && placement ? { id, placement, rejected } : undefined;
       },
     };
   }
 
-  // --- tooltip ------------------------------------------------------------
+  // --- coordinate helper --------------------------------------------------
+
+  private clientToWorld(clientX: number, clientY: number): { x: number; y: number } {
+    const rect = this.svg.getBoundingClientRect();
+    return screenToWorld(
+      clientX - rect.left,
+      clientY - rect.top,
+      this.camera,
+      rect.width,
+      rect.height
+    );
+  }
+
+  // --- tooltip / toast ----------------------------------------------------
 
   private updateTooltip(id: string | undefined, clientX: number, clientY: number): void {
     const entity = id ? byId(this.history.document, id) : undefined;
-    if (!entity) {
+    if (!entity || this.placement.active) {
       this.tooltip.hidden = true;
       return;
     }
@@ -217,36 +368,45 @@ export class App {
       parts.push(`<span class="iso-tooltip-desc">${escapeHtml(entity.description)}</span>`);
     }
     this.tooltip.innerHTML = parts.join('');
-
     const rect = this.svg.getBoundingClientRect();
     this.tooltip.style.left = `${clientX - rect.left + 14}px`;
     this.tooltip.style.top = `${clientY - rect.top + 14}px`;
     this.tooltip.hidden = false;
   }
 
+  private showToast(message: string): void {
+    this.toast.textContent = message;
+    this.toast.hidden = false;
+    if (this.toastTimer !== undefined) window.clearTimeout(this.toastTimer);
+    this.toastTimer = window.setTimeout(() => {
+      this.toast.hidden = true;
+    }, 2800);
+  }
+
   // --- mode / camera / keyboard ------------------------------------------
 
   private toggleMode(): void {
     this.mode = this.mode === 'edit' ? 'present' : 'edit';
-    // Leaving edit clears selection; leaving present clears spotlight.
     this.selection = undefined;
     this.spotlight = undefined;
     this.tooltip.hidden = true;
+    this.cancelPlacement();
+    this.notifySelection();
     this.render();
   }
 
   private fitToContent(): void {
-    // Centre the camera on the mean of entity origins so the demo appears in
-    // view without manual panning.
     const doc = this.history.document;
-    if (doc.entities.length === 0) return;
+    if (doc.entities.length === 0) {
+      this.camera = { ...this.camera, x: 0, y: 0 };
+      return;
+    }
     let sx = 0;
     let sy = 0;
     let n = 0;
     for (const e of doc.entities) {
       const p = e.placement;
       if (p.mode === 'grid') {
-        // approximate centre of footprint in world px
         sx += (p.x - p.y) * 32;
         sy += (p.x + p.y) * 16;
       } else {
@@ -259,55 +419,56 @@ export class App {
   }
 
   private scheduleCameraSync(): void {
-    if (this.cameraSyncTimer !== undefined) {
-      window.clearTimeout(this.cameraSyncTimer);
-    }
+    if (this.cameraSyncTimer !== undefined) window.clearTimeout(this.cameraSyncTimer);
     this.cameraSyncTimer = window.setTimeout(() => {
-      // Sync to doc.camera WITHOUT a command (view state is not undoable).
-      // Mutating the live document object in place is acceptable here because
-      // camera is explicitly outside the command/undo model (SCHEMA: "not
-      // undoable"); it does not trigger a history notification.
       (this.history.document as SceneDocument).camera = { ...this.camera };
     }, 250);
   }
 
+  private notifySelection(): void {
+    for (const l of this.selectionListeners) l();
+  }
+
+  private onResize = (): void => this.render();
+
   private onKeyDown = (evt: KeyboardEvent): void => {
+    const target = evt.target as HTMLElement | null;
+    const typing =
+      target &&
+      (target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT');
+
     const meta = evt.metaKey || evt.ctrlKey;
-    if (meta && evt.key.toLowerCase() === 'z') {
+    if (meta && evt.key.toLowerCase() === 'z' && !typing) {
       evt.preventDefault();
       if (evt.shiftKey) this.history.redo();
       else this.history.undo();
       return;
     }
     if (evt.key === 'Escape') {
-      this.selection = undefined;
-      this.spotlight = undefined;
-      this.tooltip.hidden = true;
-      this.render();
+      if (this.placement.active) {
+        this.cancelPlacement();
+        return;
+      }
+      if (!typing) {
+        this.selection = undefined;
+        this.spotlight = undefined;
+        this.tooltip.hidden = true;
+        this.notifySelection();
+        this.render();
+      }
     }
   };
+
+  /** Open the interview wizard (used at startup for an empty scene). */
+  openWizard(): void {
+    this.wizard.open();
+  }
 
   dispose(): void {
     this.controller.dispose();
     window.removeEventListener('keydown', this.onKeyDown);
+    window.removeEventListener('resize', this.onResize);
   }
-}
-
-// --- small DOM helpers -----------------------------------------------------
-
-function button(label: string, onClick: () => void): HTMLButtonElement {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'iso-btn';
-  b.textContent = label;
-  b.addEventListener('click', onClick);
-  return b;
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
