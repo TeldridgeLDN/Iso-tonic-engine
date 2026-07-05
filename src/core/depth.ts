@@ -32,13 +32,23 @@ export function depthKey(entity: Entity): number {
 
 /**
  * Stable-sorted copy of entities in back-to-front render order.
- * Ties (equal depth keys, incl. multiple annotations) preserve input order,
- * giving deterministic output. Array.prototype.sort is stable in modern JS.
+ *
+ * Three tiers: ground plates (flat zone content — their large footprints
+ * would otherwise give them late, structure-crossing draw order), then
+ * scene content, then annotations. Within a tier, depthKey then input order.
+ * `isGround` lets the caller identify ground-plane assets (core has no
+ * asset knowledge). Array.prototype.sort is stable in modern JS.
  */
-export function sortForRender(entities: Entity[]): Entity[] {
+export function sortForRender(
+  entities: Entity[],
+  isGround?: (entity: Entity) => boolean,
+): Entity[] {
+  const tierOf = (e: Entity): number =>
+    e.type === 'annotation' ? 2 : isGround?.(e) ? 0 : 1;
   return entities
-    .map((entity, index) => ({ entity, index, key: depthKey(entity) }))
+    .map((entity, index) => ({ entity, index, key: depthKey(entity), tier: tierOf(entity) }))
     .sort((a, b) => {
+      if (a.tier !== b.tier) return a.tier - b.tier;
       if (a.key === b.key) return a.index - b.index;
       // NaN guard not needed: keys are finite or +Infinity.
       return a.key - b.key;

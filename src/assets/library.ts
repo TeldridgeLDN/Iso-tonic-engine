@@ -35,6 +35,8 @@ export interface AssetDef {
   id: string;
   category: EntityType | 'prop';
   footprint?: { w: number; d: number };
+  /** Flat ground-plane content (zone plates): always renders beneath structures. */
+  ground?: boolean;
   render(params?: Record<string, unknown>): string;
   paramSchema?: ParamField[];
 }
@@ -155,8 +157,8 @@ const ASSETS: AssetDef[] = [
   { id: 'signpost', category: 'prop', footprint: { w: 1, d: 1 }, render: signpost },
 
   // Zones
-  { id: 'department-zone', category: 'department', render: renderZone, paramSchema: zoneSchema },
-  { id: 'process-zone', category: 'process', render: renderProcessZone, paramSchema: zoneSchema },
+  { id: 'department-zone', category: 'department', ground: true, render: renderZone, paramSchema: zoneSchema },
+  { id: 'process-zone', category: 'process', ground: true, render: renderProcessZone, paramSchema: zoneSchema },
 
   // Annotation
   { id: 'callout', category: 'annotation', render: renderCallout, paramSchema: calloutSchema },

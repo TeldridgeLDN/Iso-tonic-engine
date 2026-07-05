@@ -141,7 +141,7 @@ export function renderScene(
   if (view.showGrid) parts.push(renderGridDots(doc));
 
   const visible = doc.entities.filter((e) => isEntityVisible(doc, e));
-  const ordered = sortForRender(visible); // annotations land last (+Infinity key)
+  const ordered = sortForRender(visible, isGroundAsset); // ground plates → scene → annotations
 
   for (const entity of ordered) {
     parts.push(renderEntity(entity, view));
@@ -150,11 +150,16 @@ export function renderScene(
   sceneRoot.innerHTML = parts.join('');
 }
 
+/** Ground-plane assets (zone plates) always render beneath structures. */
+function isGroundAsset(entity: Entity): boolean {
+  return getAsset(entity.asset.symbol)?.ground === true;
+}
+
 /** Serialise the scene fragment as a string (used by tests / export prep). */
 export function renderSceneToString(doc: SceneDocument, view: ViewState = {}): string {
   const parts: string[] = [];
   if (view.showGrid) parts.push(renderGridDots(doc));
   const visible = doc.entities.filter((e) => isEntityVisible(doc, e));
-  for (const entity of sortForRender(visible)) parts.push(renderEntity(entity, view));
+  for (const entity of sortForRender(visible, isGroundAsset)) parts.push(renderEntity(entity, view));
   return parts.join('');
 }

@@ -87,4 +87,28 @@ describe('sortForRender', () => {
     sortForRender(arr);
     expect(arr).toEqual(copy);
   });
+
+  it('renders ground entities beneath structures regardless of footprint depth', () => {
+    // Large zone plate: far-corner key 14 would otherwise draw it AFTER
+    // (on top of) the building standing inside it (key 4).
+    const zone = gridEnt('zone', 0, 0, 8, 8);
+    const building = gridEnt('building', 1, 1, 2, 2);
+    const anno = annoEnt('anno');
+    const isGround = (e: Entity) => e.id === 'zone';
+
+    const withTier = sortForRender([building, anno, zone], isGround).map((e) => e.id);
+    expect(withTier).toEqual(['zone', 'building', 'anno']);
+
+    // Without the predicate the old (broken-looking) order is preserved.
+    const without = sortForRender([building, anno, zone]).map((e) => e.id);
+    expect(without).toEqual(['building', 'zone', 'anno']);
+  });
+
+  it('sorts multiple ground plates among themselves by depth key', () => {
+    const org = gridEnt('org', 0, 0, 10, 10);
+    const dept = gridEnt('dept', 1, 1, 4, 4);
+    const isGround = () => true;
+    const out = sortForRender([org, dept], isGround).map((e) => e.id);
+    expect(out).toEqual(['dept', 'org']);
+  });
 });
