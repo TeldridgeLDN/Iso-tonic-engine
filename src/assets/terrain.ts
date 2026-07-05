@@ -39,7 +39,7 @@ function num(v: unknown, dflt: number): number {
 
 // The two road entry/exit pairs (by axis). Orientation selects which pair.
 // A "straight" connects one pair; corners/T pick from all four midpoints.
-const ROAD_HALF = 3.2; // half the carriageway width in px
+const ROAD_HALF = 8; // half the carriageway width in px (~half a tile wide overall)
 
 /** Two parallel kerb lines + faint centre dashes between endpoints a..b. */
 function roadBand(a: Pt, b: Pt, dashes = true): string {
@@ -164,7 +164,7 @@ function dashArc(a: Pt, c: Pt, b: Pt): string {
 // RIVERS — wavier double line, same edge-midpoint contract
 // ========================================================================
 
-const RIVER_HALF = 4.5;
+const RIVER_HALF = 7;
 
 /** river-straight (1×1, orientations 2): wavy double line across one axis. */
 export function riverStraight(params?: Record<string, unknown>): string {
