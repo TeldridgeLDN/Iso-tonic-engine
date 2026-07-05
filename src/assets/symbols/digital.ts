@@ -1,13 +1,23 @@
 // Digital infrastructure symbols. Footprint-anchored (grid) assets.
 // Local origin = north vertex of footprint tile (0,0).
 
-import { project, isoBox, isoDiamond, polygon, line, group, type Pt } from '../primitives.ts';
+import { project, isoBox, isoDiamond, polygon, line, group, mirrorX, bboxCentreX, readOrientation, type Pt } from '../primitives.ts';
 import { INK, PAPER, STROKE_THIN } from '../style.ts';
 
 // helper: point on top face of a box at tile (tx,ty), raised `h` px
 function topPt(tx: number, ty: number, h: number): Pt {
   const g = project(tx, ty);
   return { x: g.x, y: g.y - h };
+}
+
+/** ground diamond kept upright; body mirrors about its own bbox centre for 1|3. No text in these assets. */
+function orient(params: Record<string, unknown> | undefined, _w: number, _d: number, ground: string, body: string[]): string {
+  const o = readOrientation(params);
+  if (o === 1 || o === 3) {
+    const joined = body.join('');
+    return group(0, 0, [ground, mirrorX([joined], bboxCentreX(joined))]);
+  }
+  return group(0, 0, [ground, ...body]);
 }
 
 // --- server rack: tall cabinet, 1×1, with horizontal unit slots ---------
@@ -33,8 +43,8 @@ export function serverRack(): string {
 }
 
 // --- desktop workstation: monitor + tower on a small desk, 1×1 ----------
-export function desktopWorkstation(): string {
-  const frags = [isoDiamond(1, 1)];
+export function desktopWorkstation(params?: Record<string, unknown>): string {
+  const frags: string[] = [];
   // desk box
   frags.push(isoBox(0.9, 0.6, 8));
   // monitor: upright screen standing on the desk, facing the SE (right).
@@ -51,24 +61,24 @@ export function desktopWorkstation(): string {
   // tower box beside the desk
   const t = topPt(0.15, 0.15, 8);
   frags.push(polygon([{ x: t.x, y: t.y }, { x: t.x + 4, y: t.y + 2 }, { x: t.x + 4, y: t.y - 8 }, { x: t.x, y: t.y - 10 }], { fill: PAPER, strokeWidth: STROKE_THIN }));
-  return group(0, 0, frags);
+  return orient(params, 1, 1, isoDiamond(1, 1), frags);
 }
 
 // --- laptop on a desk, 1×1 ----------------------------------------------
-export function laptopDesk(): string {
-  const frags = [isoDiamond(1, 1), isoBox(0.9, 0.7, 7)];
+export function laptopDesk(params?: Record<string, unknown>): string {
+  const frags: string[] = [isoBox(0.9, 0.7, 7)];
   const t = topPt(0.45, 0.35, 7);
   const p = (dx: number, dy: number): Pt => ({ x: t.x + dx, y: t.y + dy });
   // keyboard base (small parallelogram on top)
   frags.push(polygon([p(-7, 0), p(3, 5), p(9, 1), p(-1, -4)], { fill: PAPER, strokeWidth: STROKE_THIN }));
   // screen tilted up
   frags.push(polygon([p(-7, 0), p(-1, -4), p(2, -13), p(-4, -9)], { fill: PAPER, strokeWidth: STROKE_THIN }));
-  return group(0, 0, frags);
+  return orient(params, 1, 1, isoDiamond(1, 1), frags);
 }
 
 // --- large wall screen / dashboard, 2×1 ---------------------------------
-export function wallScreen(): string {
-  const frags = [isoDiamond(2, 1)];
+export function wallScreen(params?: Record<string, unknown>): string {
+  const frags: string[] = [];
   // stand feet
   frags.push(isoBox(2, 0.15, 3));
   // big upright panel standing along +x on the far edge
@@ -91,7 +101,7 @@ export function wallScreen(): string {
     const y = a.y - 5 - i * 4;
     frags.push(line({ x: a.x + 3, y }, { x: b.x - 3, y }, 0.6, INK));
   }
-  return group(0, 0, frags);
+  return orient(params, 2, 1, isoDiamond(2, 1), frags);
 }
 
 // --- phone kiosk / booth, 1×1 -------------------------------------------

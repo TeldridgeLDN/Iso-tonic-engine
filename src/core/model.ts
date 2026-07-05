@@ -1,7 +1,11 @@
 // Scene document types (per docs/SCHEMA.md v1) + factory & query helpers.
 // Pure TS, no DOM.
 
-import { footprintTiles } from './iso.ts';
+import { footprintTiles, effectiveFootprint } from './iso.ts';
+
+// Re-exported so callers get the rotation helper from the model surface
+// (per docs/SCHEMA.md: "always derive via core effectiveFootprint()").
+export { effectiveFootprint };
 
 // ---------------------------------------------------------------------------
 // Types (mirror docs/SCHEMA.md exactly)
@@ -27,13 +31,15 @@ export interface GridPlacement {
   mode: 'grid';
   x: number;
   y: number;
-  footprint: { w: number; d: number };
+  footprint: { w: number; d: number }; // AS AUTHORED (rotation 0)
+  rotation?: 0 | 1 | 2 | 3; // quarter-turns clockwise; default 0
 }
 
 export interface FreePlacement {
   mode: 'free';
   x: number;
   y: number;
+  rotation?: 0 | 1 | 2 | 3; // facing; default 0
 }
 
 export type Placement = GridPlacement | FreePlacement;
@@ -78,6 +84,8 @@ export interface Entity {
   placement: Placement;
   asset: AssetRef;
   anchorEntityId?: string;
+  userGoal?: string; // zones/whole-services: what the user is trying to do
+  orgGoal?: string; // zones/whole-services: what the organisation wants
   // Unknown fields must be preserved (forward compatibility).
   [key: string]: unknown;
 }
@@ -225,6 +233,38 @@ export function semanticRelatives(doc: SceneDocument, id: string): Entity[] {
   }
 
   return result;
+}
+
+/**
+ * Spotlight set for the focal entity, as a Set of entity ids: everything in
+ * semanticRelatives (self + parent/child/sibling chains) PLUS every entity
+ * that shares at least one custom layer with the focal entity. Custom layers
+ * act as cross-cutting semantic groups (Defra whole-services review), so
+ * spotlighting a member lights the whole group.
+ *
+ * Cycle-safe (via semanticRelatives) and dangling-layer-safe (a layer id the
+ * focal entity carries but that no CustomLayer defines still groups entities
+ * that literally share that id string — grouping is purely by shared id).
+ * Returns an empty set for a missing focal id.
+ */
+export function spotlightSet(doc: SceneDocument, entityId: string): Set<string> {
+  const focal = byId(doc, entityId);
+  if (!focal) return new Set<string>();
+
+  const ids = new Set<string>(semanticRelatives(doc, entityId).map((e) => e.id));
+
+  const focalLayers = focal.customLayers;
+  if (focalLayers && focalLayers.length > 0) {
+    const focalLayerSet = new Set(focalLayers);
+    for (const e of doc.entities) {
+      if (ids.has(e.id)) continue;
+      if (e.customLayers?.some((lid) => focalLayerSet.has(lid))) {
+        ids.add(e.id);
+      }
+    }
+  }
+
+  return ids;
 }
 
 // ---------------------------------------------------------------------------

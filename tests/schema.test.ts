@@ -42,6 +42,29 @@ describe('validateDocument — accept', () => {
     const res = validateDocument(doc);
     expect(res.ok).toBe(true);
   });
+
+  it('accepts rotation 0-3 on grid and free placements', () => {
+    for (const r of [0, 1, 2, 3]) {
+      const doc = baseDoc();
+      doc.entities = [
+        entity({ id: 'g', placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 1, d: 1 }, rotation: r } }),
+        entity({ id: 'f', type: 'user', placement: { mode: 'free', x: 0, y: 0, rotation: r } }),
+      ];
+      expect(validateDocument(doc).ok).toBe(true);
+    }
+  });
+
+  it('accepts absent rotation (backward compatible)', () => {
+    const doc = baseDoc();
+    doc.entities = [entity({ id: 'a' })];
+    expect(validateDocument(doc).ok).toBe(true);
+  });
+
+  it('accepts userGoal/orgGoal string fields', () => {
+    const doc = baseDoc();
+    doc.entities = [entity({ id: 'a', userGoal: 'apply for a grant', orgGoal: 'process claims' })];
+    expect(validateDocument(doc).ok).toBe(true);
+  });
 });
 
 describe('validateDocument — reject', () => {
@@ -122,6 +145,34 @@ describe('validateDocument — reject', () => {
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.errors.some((e) => e.includes('duplicate layer id'))).toBe(true);
   });
+
+  it('rejects rotation out of range (4)', () => {
+    const doc = baseDoc();
+    doc.entities = [
+      entity({ id: 'a', placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 1, d: 1 }, rotation: 4 } }),
+    ];
+    const res = validateDocument(doc);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.errors.some((e) => e.includes('rotation'))).toBe(true);
+  });
+
+  it('rejects non-integer rotation', () => {
+    const doc = baseDoc();
+    doc.entities = [
+      entity({ id: 'a', placement: { mode: 'free', x: 0, y: 0, rotation: 1.5 } }),
+    ];
+    const res = validateDocument(doc);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.errors.some((e) => e.includes('rotation'))).toBe(true);
+  });
+
+  it('rejects non-string userGoal / orgGoal', () => {
+    const doc = baseDoc();
+    doc.entities = [entity({ id: 'a', userGoal: 42 })];
+    const res = validateDocument(doc);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.errors.some((e) => e.includes('userGoal'))).toBe(true);
+  });
 });
 
 describe('validateDocument — warnings not errors', () => {
@@ -134,6 +185,32 @@ describe('validateDocument — warnings not errors', () => {
     const res = validateDocument(doc);
     expect(res.ok).toBe(true);
     expect(res.warnings.some((w) => w.includes('overlap'))).toBe(true);
+  });
+
+  it('overlap warnings use EFFECTIVE (rotated) footprints', () => {
+    const doc = baseDoc();
+    // a: 1x1 at (0,1). b: 2x1 at (0,0) rotation 1 → effective 1x2 → (0,0),(0,1)
+    // overlaps a at (0,1). Unrotated b (0,0),(1,0) would NOT overlap.
+    doc.entities = [
+      entity({ id: 'a', placement: { mode: 'grid', x: 0, y: 1, footprint: { w: 1, d: 1 } } }),
+      entity({ id: 'b', placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 2, d: 1 }, rotation: 1 } }),
+    ];
+    const res = validateDocument(doc);
+    expect(res.ok).toBe(true);
+    expect(res.warnings.some((w) => w.includes('overlap'))).toBe(true);
+  });
+
+  it('does NOT warn when rotation makes footprints disjoint', () => {
+    const doc = baseDoc();
+    // a: 1x1 at (1,0). b: 2x1 at (0,0) rotation 1 → effective 1x2 → (0,0),(0,1)
+    // disjoint from a. Unrotated b (0,0),(1,0) WOULD overlap a — rotation clears it.
+    doc.entities = [
+      entity({ id: 'a', placement: { mode: 'grid', x: 1, y: 0, footprint: { w: 1, d: 1 } } }),
+      entity({ id: 'b', placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 2, d: 1 }, rotation: 1 } }),
+    ];
+    const res = validateDocument(doc);
+    expect(res.ok).toBe(true);
+    expect(res.warnings.some((w) => w.includes('overlap'))).toBe(false);
   });
 });
 

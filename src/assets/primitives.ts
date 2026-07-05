@@ -56,6 +56,22 @@ export function circle(c: Pt, r: number, opts: FaceOpts = {}): string {
   return `<circle cx="${n(c.x)}" cy="${n(c.y)}" r="${n(r)}" fill="${fill}" stroke="${stroke}" stroke-width="${n(sw)}" stroke-linejoin="round"/>`;
 }
 
+/**
+ * An axis-aligned ellipse rendered as a <path> (two elliptical arcs) so it
+ * stays within the svg2pdf dialect (no <ellipse> element). Opaque PAPER fill
+ * by default so it occludes like other faces.
+ */
+export function ellipse(cx: number, cy: number, rx: number, ry: number, opts: FaceOpts = {}): string {
+  const fill = opts.fill ?? PAPER;
+  const stroke = opts.stroke ?? INK;
+  const sw = opts.strokeWidth ?? STROKE;
+  const d =
+    `M ${n(cx - rx)} ${n(cy)} ` +
+    `A ${n(rx)} ${n(ry)} 0 0 1 ${n(cx + rx)} ${n(cy)} ` +
+    `A ${n(rx)} ${n(ry)} 0 0 1 ${n(cx - rx)} ${n(cy)} Z`;
+  return `<path d="${d}" fill="${fill}" stroke="${stroke}" stroke-width="${n(sw)}" stroke-linejoin="round"/>`;
+}
+
 /** Filled shape from an explicit SVG path string of local coords. */
 export function pathFill(d: string, opts: FaceOpts = {}): string {
   const fill = opts.fill ?? PAPER;
@@ -91,6 +107,58 @@ export function text(x: number, y: number, s: string, opts: TextOpts = {}): stri
 export function group(dx: number, dy: number, frags: string[]): string {
   if (dx === 0 && dy === 0) return frags.join('');
   return `<g transform="translate(${n(dx)} ${n(dy)})">${frags.join('')}</g>`;
+}
+
+// --- orientation helpers -------------------------------------------------
+
+/**
+ * Read the reserved `orientation` key (0–3 quarter-turns) from a params bag.
+ * Absent / invalid ⇒ 0 (current output). Fully backward compatible.
+ */
+export function readOrientation(params?: Record<string, unknown>): number {
+  const v = params?.orientation;
+  const o = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(o) ? ((Math.round(o) % 4) + 4) % 4 : 0;
+}
+
+/**
+ * Horizontal mirror (scale(−1,1)) about the anchor x = ax. Legitimate way to
+ * implement the alternate facing for symmetric-enough assets. TEXT MUST NOT be
+ * passed through here — re-render any text upright outside the mirror group.
+ */
+export function mirrorX(frags: string[], ax = 0): string {
+  const inner = frags.join('');
+  if (ax === 0) return `<g transform="scale(-1 1)">${inner}</g>`;
+  // scale(-1,1) about x=ax  ==  translate(2ax) then scale(-1,1)
+  return `<g transform="translate(${n(2 * ax)} 0) scale(-1 1)">${inner}</g>`;
+}
+
+/**
+ * Screen-x centre of a rendered fragment's bounding box. Scans x-bearing
+ * coordinates (points= / x= / cx= / x1= / x2=) so a mirror about this axis
+ * leaves the silhouette in the same screen columns (no drift off the tile).
+ * Used to mirror body-only fragments that aren't authored symmetric about the
+ * footprint centre.
+ */
+export function bboxCentreX(frag: string): number {
+  const xs: number[] = [];
+  // points="x,y x,y ..."
+  const ptsRe = /points="([^"]+)"/g;
+  let m: RegExpExecArray | null;
+  while ((m = ptsRe.exec(frag))) {
+    for (const pair of m[1].trim().split(/\s+/)) {
+      const x = Number(pair.split(',')[0]);
+      if (Number.isFinite(x)) xs.push(x);
+    }
+  }
+  // standalone x-coords: x=, cx=, x1=, x2=  (d="M x y ..." paths not used by mirrored assets)
+  const attrRe = /\b(?:x|cx|x1|x2)="(-?\d+(?:\.\d+)?)"/g;
+  while ((m = attrRe.exec(frag))) {
+    const x = Number(m[1]);
+    if (Number.isFinite(x)) xs.push(x);
+  }
+  if (!xs.length) return 0;
+  return (Math.min(...xs) + Math.max(...xs)) / 2;
 }
 
 // --- isometric primitives -----------------------------------------------

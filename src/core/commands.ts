@@ -142,6 +142,55 @@ export class MoveEntity implements Command {
 }
 
 // ---------------------------------------------------------------------------
+// RotateEntity (both placement modes)
+// ---------------------------------------------------------------------------
+
+export type Rotation = 0 | 1 | 2 | 3;
+
+/**
+ * Set a grid or free placement's rotation. `from`/`to` are the prior and next
+ * quarter-turn values; absent stored rotation is treated as 0. The stored
+ * footprint is left AS AUTHORED — effective extents are derived at render/
+ * collision time via effectiveFootprint. Invert restores `from`.
+ */
+export class RotateEntity implements Command {
+  label = 'Rotate entity';
+  private readonly id: string;
+  private readonly from: Rotation;
+  private readonly to: Rotation;
+  // Whether the placement carried an explicit rotation key before apply, so
+  // invert can restore an absent key exactly (not stamp rotation:0).
+  private prevPresent = false;
+
+  constructor(args: { entityId: string; from: Rotation; to: Rotation }) {
+    this.id = args.entityId;
+    this.from = args.from;
+    this.to = args.to;
+  }
+
+  apply(doc: SceneDocument): SceneDocument {
+    const e = requireEntity(doc, this.id);
+    this.prevPresent = e.placement.rotation !== undefined;
+    return mapEntity(doc, this.id, (ent) => ({
+      ...ent,
+      placement: { ...ent.placement, rotation: this.to },
+    }));
+  }
+
+  invert(doc: SceneDocument): SceneDocument {
+    return mapEntity(doc, this.id, (ent) => {
+      const placement: Placement = { ...ent.placement };
+      if (this.prevPresent) {
+        placement.rotation = this.from;
+      } else {
+        delete placement.rotation;
+      }
+      return { ...ent, placement };
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
 // UpdateEntityProps
 // ---------------------------------------------------------------------------
 
@@ -150,6 +199,9 @@ export interface EntityPropsPatch {
   description?: string;
   // Use null to explicitly clear parentId; omit to leave unchanged.
   parentId?: string | null;
+  // Use null to explicitly clear a goal; omit to leave unchanged.
+  userGoal?: string | null;
+  orgGoal?: string | null;
   // Shallow patch merged into asset.params.
   params?: Record<string, unknown>;
 }
@@ -183,6 +235,20 @@ export class UpdateEntityProps implements Command {
           delete next.parentId;
         } else {
           next.parentId = this.patch.parentId;
+        }
+      }
+      if (this.patch.userGoal !== undefined) {
+        if (this.patch.userGoal === null) {
+          delete next.userGoal;
+        } else {
+          next.userGoal = this.patch.userGoal;
+        }
+      }
+      if (this.patch.orgGoal !== undefined) {
+        if (this.patch.orgGoal === null) {
+          delete next.orgGoal;
+        } else {
+          next.orgGoal = this.patch.orgGoal;
         }
       }
       if (this.patch.params !== undefined) {

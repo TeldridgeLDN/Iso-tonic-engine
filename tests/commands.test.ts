@@ -3,6 +3,7 @@ import {
   PlaceEntity,
   DeleteEntity,
   MoveEntity,
+  RotateEntity,
   UpdateEntityProps,
   AssignLayers,
   AddLayer,
@@ -96,6 +97,53 @@ describe('every command inverts', () => {
 
   it('MoveEntity (free)', () => {
     assertInverts(new MoveEntity('b', { mode: 'free', x: 99, y: 12 }), fixture());
+  });
+
+  it('RotateEntity (grid, from absent/0 → 1)', () => {
+    assertInverts(new RotateEntity({ entityId: 'a', from: 0, to: 1 }), fixture());
+  });
+
+  it('RotateEntity (free placement)', () => {
+    assertInverts(new RotateEntity({ entityId: 'b', from: 0, to: 3 }), fixture());
+  });
+
+  it('RotateEntity sets placement.rotation and round-trips', () => {
+    const d = fixture();
+    const cmd = new RotateEntity({ entityId: 'a', from: 0, to: 2 });
+    const applied = cmd.apply(d);
+    const pa = applied.entities.find((e) => e.id === 'a')!.placement;
+    expect(pa.rotation).toBe(2);
+    const reverted = cmd.invert(applied);
+    const pr = reverted.entities.find((e) => e.id === 'a')!.placement;
+    // original 'a' had no rotation key → invert restores it absent, not 0.
+    expect(pr.rotation).toBeUndefined();
+    // preserves footprint and coords (grid)
+    expect(pr).toMatchObject({ mode: 'grid', x: 0, y: 0, footprint: { w: 1, d: 1 } });
+  });
+
+  it('RotateEntity when a prior rotation exists (2 → 3) restores 2 on invert', () => {
+    const d = fixture();
+    d.entities = d.entities.map((e) =>
+      e.id === 'a'
+        ? { ...e, placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 1, d: 1 }, rotation: 2 } }
+        : e
+    );
+    assertInverts(new RotateEntity({ entityId: 'a', from: 2, to: 3 }), d);
+  });
+
+  it('UpdateEntityProps patches userGoal/orgGoal invertibly', () => {
+    assertInverts(
+      new UpdateEntityProps('a', { userGoal: 'renew my passport', orgGoal: 'reduce fraud' }),
+      fixture()
+    );
+  });
+
+  it('UpdateEntityProps clearing a goal invertibly', () => {
+    const d = fixture();
+    d.entities = d.entities.map((e) =>
+      e.id === 'a' ? { ...e, userGoal: 'existing goal' } : e
+    );
+    assertInverts(new UpdateEntityProps('a', { userGoal: null }), d);
   });
 
   it('UpdateEntityProps (label/description/params)', () => {

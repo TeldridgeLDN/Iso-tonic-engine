@@ -225,6 +225,14 @@ function validateEntity(
     errors.push(`entities[${i}].asset.symbol must be a string`);
   }
 
+  // userGoal / orgGoal (optional strings)
+  if (ent.userGoal !== undefined && typeof ent.userGoal !== 'string') {
+    errors.push(`entities[${i}].userGoal must be a string`);
+  }
+  if (ent.orgGoal !== undefined && typeof ent.orgGoal !== 'string') {
+    errors.push(`entities[${i}].orgGoal must be a string`);
+  }
+
   // placement
   validatePlacement(ent.placement, i, errors);
 }
@@ -253,13 +261,34 @@ function validatePlacement(
         );
       }
     }
+    validateRotation(placement.rotation, i, errors);
   } else if (mode === 'free') {
     if (!isFiniteNumber(placement.x) || !isFiniteNumber(placement.y)) {
       errors.push(`entities[${i}].placement free x/y must be finite numbers`);
     }
+    validateRotation(placement.rotation, i, errors);
   } else {
     errors.push(
       `entities[${i}].placement.mode must be "grid" or "free" (got ${JSON.stringify(mode)})`
+    );
+  }
+}
+
+/** rotation, when present, must be an integer in {0,1,2,3}. */
+function validateRotation(
+  rotation: unknown,
+  i: number,
+  errors: string[]
+): void {
+  if (rotation === undefined) return;
+  if (
+    typeof rotation !== 'number' ||
+    !Number.isInteger(rotation) ||
+    rotation < 0 ||
+    rotation > 3
+  ) {
+    errors.push(
+      `entities[${i}].placement.rotation must be an integer 0-3 (got ${JSON.stringify(rotation)})`
     );
   }
 }

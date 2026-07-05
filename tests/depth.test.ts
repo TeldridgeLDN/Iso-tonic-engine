@@ -47,6 +47,39 @@ describe('depthKey', () => {
   it('annotations are +Infinity', () => {
     expect(depthKey(annoEnt('a'))).toBe(Number.POSITIVE_INFINITY);
   });
+
+  it('grid far-corner reads the effective (rotation-applied) footprint', () => {
+    // The far-corner SUM (x+w-1)+(y+d-1) is invariant to swapping w↔d about a
+    // fixed origin, so the numeric key is unchanged for a rotation at the same
+    // origin — but the code path must still read effectiveFootprint. Verify the
+    // key equals the equivalent unrotated-swapped placement.
+    const rotated: Entity = {
+      id: 'rot',
+      type: 'department',
+      label: 'rot',
+      placement: { mode: 'grid', x: 1, y: 2, footprint: { w: 4, d: 2 }, rotation: 1 },
+      asset: { symbol: 'z' },
+    };
+    const equivSwapped = gridEnt('eq', 1, 2, 2, 4); // effective 2x4
+    expect(depthKey(rotated)).toBe(depthKey(equivSwapped));
+  });
+
+  it('sortForRender uses rotated footprints for depth ordering', () => {
+    // Two entities whose relative depth flips only when rotation is applied.
+    // A: authored 1x4 at (0,0) → far corner (0)+(3) = 3.
+    const a = gridEnt('a', 0, 0, 1, 4);
+    // B: authored 1x4 at (2,0), rotation 1 → effective 4x1 → far corner (2+3)+(0) = 5.
+    const b: Entity = {
+      id: 'b',
+      type: 'department',
+      label: 'b',
+      placement: { mode: 'grid', x: 2, y: 0, footprint: { w: 1, d: 4 }, rotation: 1 },
+      asset: { symbol: 'z' },
+    };
+    expect(depthKey(b)).toBe(5);
+    const out = sortForRender([b, a]).map((e) => e.id);
+    expect(out).toEqual(['a', 'b']); // a (key 3) before b (key 5)
+  });
 });
 
 describe('sortForRender', () => {

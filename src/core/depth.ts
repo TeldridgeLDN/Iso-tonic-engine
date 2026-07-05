@@ -2,7 +2,7 @@
 // Pure TS, no DOM.
 
 import type { Entity } from './model.ts';
-import { screenToTile } from './iso.ts';
+import { screenToTile, effectiveFootprint } from './iso.ts';
 
 /**
  * Depth key for an entity.
@@ -20,8 +20,9 @@ export function depthKey(entity: Entity): number {
 
   const p = entity.placement;
   if (p.mode === 'grid') {
-    const farX = p.x + p.footprint.w - 1;
-    const farY = p.y + p.footprint.d - 1;
+    const { w, d } = effectiveFootprint(p);
+    const farX = p.x + w - 1;
+    const farY = p.y + d - 1;
     return farX + farY;
   }
 

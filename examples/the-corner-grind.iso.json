@@ -1,0 +1,651 @@
+{
+  "version": 1,
+  "meta": {
+    "title": "The Corner Grind",
+    "description": "An independent neighbourhood coffeeshop serving walk-in regulars, remote workers, and a morning takeaway rush, with a small kitchen doing brunch.",
+    "created": "2026-07-05T13:40:00.000Z",
+    "modified": "2026-07-05T13:40:00.000Z"
+  },
+  "layers": [
+    {
+      "id": "front-of-house",
+      "name": "Front of house",
+      "visible": true
+    },
+    {
+      "id": "the-street",
+      "name": "The street",
+      "visible": true
+    }
+  ],
+  "figurinePresets": {
+    "barista": {
+      "skin": "tone-2",
+      "hairStyle": "short",
+      "hairColor": "black",
+      "top": "jacket",
+      "bottom": "trousers",
+      "accessory": "none"
+    }
+  },
+  "entities": [
+    {
+      "id": "org-corner-grind",
+      "type": "organisation",
+      "label": "The Corner Grind",
+      "description": "Independent neighbourhood coffeeshop \u2014 regulars, remote workers, and the morning rush.",
+      "userGoal": "A third place that feels like theirs",
+      "orgGoal": "Be the street's third place \u2014 profitable enough to stay",
+      "placement": {
+        "mode": "grid",
+        "x": 0,
+        "y": 0,
+        "footprint": {
+          "w": 12,
+          "d": 9
+        }
+      },
+      "asset": {
+        "symbol": "department-zone",
+        "params": {
+          "w": 12,
+          "d": 9,
+          "label": "The Corner Grind",
+          "number": 1,
+          "userGroups": "Regulars, Remote, Rush"
+        }
+      }
+    },
+    {
+      "id": "shop-building",
+      "type": "physical-infra",
+      "label": "The shop",
+      "description": "Shopfront with awning \u2014 counter, espresso machine and kitchen inside.",
+      "parentId": "org-corner-grind",
+      "placement": {
+        "mode": "grid",
+        "x": 6,
+        "y": 1,
+        "footprint": {
+          "w": 2,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "shop-front",
+        "params": {
+          "signage": "THE CORNER GRIND"
+        }
+      }
+    },
+    {
+      "id": "process-order",
+      "type": "process",
+      "label": "Order \u2192 cup",
+      "description": "Till \u2192 espresso machine \u2192 handoff. The takeaway rush lives or dies here.",
+      "userGoal": "Coffee in under 3 minutes",
+      "orgGoal": "Keep the line moving without rushing the regulars",
+      "parentId": "org-corner-grind",
+      "placement": {
+        "mode": "grid",
+        "x": 4,
+        "y": 3,
+        "footprint": {
+          "w": 4,
+          "d": 3
+        }
+      },
+      "asset": {
+        "symbol": "process-zone",
+        "params": {
+          "w": 4,
+          "d": 3,
+          "label": "Order \u2192 cup"
+        }
+      }
+    },
+    {
+      "id": "epos-till",
+      "type": "digital-infra",
+      "label": "EPOS till + card reader",
+      "description": "The digital heart of the shop \u2014 orders, payments, end-of-day totals.",
+      "parentId": "process-order",
+      "placement": {
+        "mode": "grid",
+        "x": 5,
+        "y": 3,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "desktop-workstation"
+      }
+    },
+    {
+      "id": "menu-board",
+      "type": "digital-infra",
+      "label": "Digital menu / specials board",
+      "description": "Today's menu and specials, updated from the till.",
+      "parentId": "org-corner-grind",
+      "placement": {
+        "mode": "grid",
+        "x": 4,
+        "y": 2,
+        "footprint": {
+          "w": 2,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "wall-screen"
+      },
+      "customLayers": [
+        "front-of-house"
+      ]
+    },
+    {
+      "id": "seating-1",
+      "type": "physical-infra",
+      "label": "Caf\u00e9 seating",
+      "description": "Outdoor tables \u2014 where the regulars settle in.",
+      "parentId": "org-corner-grind",
+      "placement": {
+        "mode": "grid",
+        "x": 2,
+        "y": 4,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "cafe-seating"
+      },
+      "customLayers": [
+        "front-of-house"
+      ]
+    },
+    {
+      "id": "seating-2",
+      "type": "physical-infra",
+      "label": "Caf\u00e9 seating",
+      "description": "More outdoor tables, parasol for the sunny side.",
+      "parentId": "org-corner-grind",
+      "placement": {
+        "mode": "grid",
+        "x": 3,
+        "y": 5,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "cafe-seating"
+      },
+      "customLayers": [
+        "front-of-house"
+      ]
+    },
+    {
+      "id": "laptop-desk-1",
+      "type": "physical-infra",
+      "label": "Laptop table",
+      "description": "The remote workers' corner \u2014 power socket and wifi.",
+      "parentId": "org-corner-grind",
+      "placement": {
+        "mode": "grid",
+        "x": 3,
+        "y": 4,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "laptop-desk"
+      },
+      "customLayers": [
+        "front-of-house"
+      ]
+    },
+    {
+      "id": "barista-1",
+      "type": "user",
+      "label": "Barista \u2014 Maya",
+      "description": "Counter crew. Goal: keep the line moving without rushing the regulars.",
+      "parentId": "org-corner-grind",
+      "placement": {
+        "mode": "free",
+        "x": 105.6,
+        "y": 123.2
+      },
+      "asset": {
+        "symbol": "figurine",
+        "params": {
+          "skin": "tone-3",
+          "hairStyle": "bun",
+          "hairColor": "black",
+          "top": "jacket",
+          "bottom": "trousers",
+          "accessory": "none",
+          "preset": "barista"
+        }
+      }
+    },
+    {
+      "id": "barista-2",
+      "type": "user",
+      "label": "Barista \u2014 Tom",
+      "description": "Counter crew. Espresso machine end of the bar.",
+      "parentId": "org-corner-grind",
+      "placement": {
+        "mode": "free",
+        "x": 128,
+        "y": 153.6
+      },
+      "asset": {
+        "symbol": "figurine",
+        "params": {
+          "skin": "tone-1",
+          "hairStyle": "short",
+          "hairColor": "brown",
+          "top": "jacket",
+          "bottom": "trousers",
+          "accessory": "none",
+          "preset": "barista"
+        }
+      }
+    },
+    {
+      "id": "cook",
+      "type": "user",
+      "label": "Kitchen \u2014 Sam",
+      "description": "Brunch service. Goal: get orders out while they're hot.",
+      "parentId": "org-corner-grind",
+      "placement": {
+        "mode": "free",
+        "x": 204.8,
+        "y": 160
+      },
+      "asset": {
+        "symbol": "figurine",
+        "params": {
+          "skin": "tone-4",
+          "hairStyle": "curly",
+          "hairColor": "black",
+          "top": "shirt",
+          "bottom": "trousers",
+          "accessory": "none"
+        }
+      }
+    },
+    {
+      "id": "manager",
+      "type": "user",
+      "label": "Owner-manager \u2014 Priya",
+      "description": "Floats between counter, kitchen and the books. Goal: quality up, costs down.",
+      "parentId": "org-corner-grind",
+      "placement": {
+        "mode": "free",
+        "x": 179.2,
+        "y": 192
+      },
+      "asset": {
+        "symbol": "figurine",
+        "params": {
+          "skin": "tone-3",
+          "hairStyle": "long",
+          "hairColor": "black",
+          "top": "hoodie",
+          "bottom": "trousers",
+          "accessory": "clipboard"
+        }
+      }
+    },
+    {
+      "id": "rush-1",
+      "type": "user",
+      "label": "Takeaway rush",
+      "description": "Trades on the way to site. Goal: coffee in under 3 minutes.",
+      "placement": {
+        "mode": "free",
+        "x": 12.8,
+        "y": 128
+      },
+      "asset": {
+        "symbol": "figurine",
+        "params": {
+          "skin": "tone-2",
+          "hairStyle": "short",
+          "hairColor": "brown",
+          "top": "hiviz",
+          "bottom": "trousers",
+          "accessory": "hardhat"
+        }
+      },
+      "customLayers": [
+        "front-of-house"
+      ]
+    },
+    {
+      "id": "rush-2",
+      "type": "user",
+      "label": "Takeaway rush",
+      "description": "Commuter, headphones in, order memorised.",
+      "placement": {
+        "mode": "free",
+        "x": 3.2,
+        "y": 161.6
+      },
+      "asset": {
+        "symbol": "figurine",
+        "params": {
+          "skin": "tone-5",
+          "hairStyle": "bald",
+          "hairColor": "black",
+          "top": "jacket",
+          "bottom": "trousers",
+          "accessory": "headset"
+        }
+      },
+      "customLayers": [
+        "front-of-house"
+      ]
+    },
+    {
+      "id": "rush-3",
+      "type": "user",
+      "label": "Takeaway rush",
+      "description": "School-run parent on a tight window.",
+      "placement": {
+        "mode": "free",
+        "x": -6.4,
+        "y": 195.2
+      },
+      "asset": {
+        "symbol": "figurine",
+        "params": {
+          "skin": "tone-1",
+          "hairStyle": "bun",
+          "hairColor": "blonde",
+          "top": "shirt",
+          "bottom": "skirt",
+          "accessory": "none"
+        }
+      },
+      "customLayers": [
+        "front-of-house"
+      ]
+    },
+    {
+      "id": "regular-1",
+      "type": "user",
+      "label": "Regular",
+      "description": "In every morning. Goal: feel at home.",
+      "placement": {
+        "mode": "free",
+        "x": -102.4,
+        "y": 76.8
+      },
+      "asset": {
+        "symbol": "figurine",
+        "params": {
+          "skin": "tone-2",
+          "hairStyle": "long",
+          "hairColor": "grey",
+          "top": "shirt",
+          "bottom": "trousers",
+          "accessory": "none"
+        }
+      },
+      "customLayers": [
+        "front-of-house"
+      ]
+    },
+    {
+      "id": "regular-2",
+      "type": "user",
+      "label": "Regular",
+      "description": "Dog-walker, takes the same outside table.",
+      "placement": {
+        "mode": "free",
+        "x": -134.4,
+        "y": 118.4
+      },
+      "asset": {
+        "symbol": "figurine",
+        "params": {
+          "skin": "tone-1",
+          "hairStyle": "curly",
+          "hairColor": "auburn",
+          "top": "hoodie",
+          "bottom": "shorts",
+          "accessory": "none"
+        }
+      },
+      "customLayers": [
+        "front-of-house"
+      ]
+    },
+    {
+      "id": "regular-3",
+      "type": "user",
+      "label": "Regular",
+      "description": "Retired, reads the paper cover to cover.",
+      "placement": {
+        "mode": "free",
+        "x": -102.4,
+        "y": 166.4
+      },
+      "asset": {
+        "symbol": "figurine",
+        "params": {
+          "skin": "tone-4",
+          "hairStyle": "short",
+          "hairColor": "grey",
+          "top": "jacket",
+          "bottom": "trousers",
+          "accessory": "none"
+        }
+      },
+      "customLayers": [
+        "front-of-house"
+      ]
+    },
+    {
+      "id": "remote-1",
+      "type": "user",
+      "label": "Remote worker",
+      "description": "Laptop, headphones, three refills. Goal: a table, wifi and refills.",
+      "placement": {
+        "mode": "free",
+        "x": -38.4,
+        "y": 144
+      },
+      "asset": {
+        "symbol": "figurine",
+        "params": {
+          "skin": "tone-3",
+          "hairStyle": "short",
+          "hairColor": "black",
+          "top": "hoodie",
+          "bottom": "trousers",
+          "accessory": "headset"
+        }
+      },
+      "customLayers": [
+        "front-of-house"
+      ]
+    },
+    {
+      "id": "remote-2",
+      "type": "user",
+      "label": "Remote worker",
+      "description": "Freelancer treating table four as an office.",
+      "placement": {
+        "mode": "free",
+        "x": -57.6,
+        "y": 176
+      },
+      "asset": {
+        "symbol": "figurine",
+        "params": {
+          "skin": "tone-5",
+          "hairStyle": "curly",
+          "hairColor": "black",
+          "top": "shirt",
+          "bottom": "skirt",
+          "accessory": "none"
+        }
+      },
+      "customLayers": [
+        "front-of-house"
+      ]
+    },
+    {
+      "id": "street-tree-1",
+      "type": "physical-infra",
+      "label": "Street tree",
+      "placement": {
+        "mode": "grid",
+        "x": 1,
+        "y": 9,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "tree-round"
+      },
+      "customLayers": [
+        "the-street"
+      ]
+    },
+    {
+      "id": "street-tree-2",
+      "type": "physical-infra",
+      "label": "Street tree",
+      "placement": {
+        "mode": "grid",
+        "x": 9,
+        "y": 9,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "tree-round"
+      },
+      "customLayers": [
+        "the-street"
+      ]
+    },
+    {
+      "id": "street-lamp-1",
+      "type": "physical-infra",
+      "label": "Street lamp",
+      "placement": {
+        "mode": "grid",
+        "x": 5,
+        "y": 9,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "street-lamp"
+      },
+      "customLayers": [
+        "the-street"
+      ]
+    },
+    {
+      "id": "supplier-van",
+      "type": "physical-infra",
+      "label": "Bean supplier van",
+      "description": "Weekly delivery from the roastery. Goal: drop and go.",
+      "placement": {
+        "mode": "grid",
+        "x": 2,
+        "y": 9,
+        "footprint": {
+          "w": 2,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "van"
+      },
+      "customLayers": [
+        "the-street"
+      ]
+    },
+    {
+      "id": "supplier-driver",
+      "type": "user",
+      "label": "Delivery driver",
+      "description": "Roastery driver \u2014 two sacks of beans, signature, gone.",
+      "placement": {
+        "mode": "free",
+        "x": -169.6,
+        "y": 225.6
+      },
+      "asset": {
+        "symbol": "figurine",
+        "params": {
+          "skin": "tone-2",
+          "hairStyle": "short",
+          "hairColor": "black",
+          "top": "hiviz",
+          "bottom": "trousers",
+          "accessory": "none"
+        }
+      },
+      "customLayers": [
+        "the-street"
+      ]
+    },
+    {
+      "id": "callout-tables",
+      "type": "annotation",
+      "label": "Tables at peak",
+      "anchorEntityId": "seating-1",
+      "placement": {
+        "mode": "free",
+        "x": -260,
+        "y": -20
+      },
+      "asset": {
+        "symbol": "callout",
+        "params": {
+          "text": "How do regulars and remote workers share the tables at peak?",
+          "leader": true
+        }
+      }
+    },
+    {
+      "id": "callout-promise",
+      "type": "annotation",
+      "label": "The 3-minute promise",
+      "anchorEntityId": "process-order",
+      "placement": {
+        "mode": "free",
+        "x": 140,
+        "y": -50
+      },
+      "asset": {
+        "symbol": "callout",
+        "params": {
+          "text": "Can we keep the 3-minute promise when rush and brunch collide?",
+          "leader": true
+        }
+      }
+    }
+  ]
+}

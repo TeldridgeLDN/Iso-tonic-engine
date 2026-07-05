@@ -7,6 +7,7 @@ import {
   snapToTile,
   footprintTiles,
   footprintBaseBBox,
+  effectiveFootprint,
 } from '../src/core/iso.ts';
 import type { GridPlacement } from '../src/core/model.ts';
 
@@ -60,6 +61,27 @@ describe('snapToTile', () => {
   });
 });
 
+describe('effectiveFootprint', () => {
+  it('is identity for even rotations (0, 2) and absent rotation', () => {
+    const base: GridPlacement = { mode: 'grid', x: 0, y: 0, footprint: { w: 2, d: 1 } };
+    expect(effectiveFootprint(base)).toEqual({ w: 2, d: 1 });
+    expect(effectiveFootprint({ ...base, rotation: 0 })).toEqual({ w: 2, d: 1 });
+    expect(effectiveFootprint({ ...base, rotation: 2 })).toEqual({ w: 2, d: 1 });
+  });
+
+  it('swaps w/d for odd rotations (1, 3)', () => {
+    const base: GridPlacement = { mode: 'grid', x: 0, y: 0, footprint: { w: 2, d: 1 } };
+    expect(effectiveFootprint({ ...base, rotation: 1 })).toEqual({ w: 1, d: 2 });
+    expect(effectiveFootprint({ ...base, rotation: 3 })).toEqual({ w: 1, d: 2 });
+  });
+
+  it('does not mutate the stored footprint (authored footprint preserved)', () => {
+    const base: GridPlacement = { mode: 'grid', x: 0, y: 0, footprint: { w: 2, d: 1 }, rotation: 1 };
+    effectiveFootprint(base);
+    expect(base.footprint).toEqual({ w: 2, d: 1 });
+  });
+});
+
 describe('footprintTiles', () => {
   it('enumerates the occupied tiles of a footprint', () => {
     const p: GridPlacement = { mode: 'grid', x: 2, y: 3, footprint: { w: 2, d: 2 } };
@@ -78,6 +100,25 @@ describe('footprintTiles', () => {
   it('handles 1x1', () => {
     const p: GridPlacement = { mode: 'grid', x: 0, y: 0, footprint: { w: 1, d: 1 } };
     expect(footprintTiles(p)).toEqual([{ tx: 0, ty: 0 }]);
+  });
+
+  it('occupies the rotated (effective) tiles for an odd rotation', () => {
+    // 2x1 authored (tiles along +x), rotated 1 → 1x2 (tiles along +y).
+    const p: GridPlacement = { mode: 'grid', x: 0, y: 0, footprint: { w: 2, d: 1 }, rotation: 1 };
+    expect(footprintTiles(p)).toEqual([
+      { tx: 0, ty: 0 },
+      { tx: 0, ty: 1 },
+    ]);
+  });
+});
+
+describe('footprintBaseBBox (rotation-aware)', () => {
+  it('bounds the swapped extents for an odd rotation', () => {
+    // authored 2x1, rotation 1 → effective 1x2.
+    const p: GridPlacement = { mode: 'grid', x: 0, y: 0, footprint: { w: 2, d: 1 }, rotation: 1 };
+    const rotated = footprintBaseBBox(p);
+    const equiv = footprintBaseBBox({ mode: 'grid', x: 0, y: 0, footprint: { w: 1, d: 2 } });
+    expect(rotated).toEqual(equiv);
   });
 });
 

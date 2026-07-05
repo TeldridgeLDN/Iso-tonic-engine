@@ -2,7 +2,7 @@
 // Origin = feet centre (standing point). Height ~46px; figure rises in −y.
 // Parts composited in render order: body → bottom → top → head → hair → accessory.
 
-import { polygon, polyline, line, circle, pathFill, group, type Pt } from './primitives.ts';
+import { polygon, polyline, line, circle, pathFill, group, mirrorX, readOrientation, type Pt } from './primitives.ts';
 import {
   INK,
   PAPER,
@@ -296,6 +296,10 @@ function accessory(p: FigurineParams): string {
 export function renderFigurine(params?: Record<string, unknown>): string {
   const p = normalize(params);
   const frags = [body(p), bottom(p), top(p), head(p), hair(p), accessory(p)];
+  // orientations: 2 — facing 1|3 mirror about the feet anchor (x=0). No text
+  // inside the figurine, so a plain scale(-1,1) is safe.
+  const o = readOrientation(params);
+  if (o === 1 || o === 3) return mirrorX(frags, 0);
   return group(0, 0, frags);
 }
 

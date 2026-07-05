@@ -65,13 +65,32 @@ export function snapToTile(tx: number, ty: number): TilePoint {
 }
 
 /**
- * The integer tiles occupied by a grid placement's footprint.
- * Footprint spans [x, x+w) along +x and [y, y+d) along +y.
+ * Effective (rotation-applied) footprint of a grid placement.
+ *
+ * The stored `footprint` is always AS AUTHORED (rotation 0). A quarter-turn
+ * swaps the +x and +y extents, so odd rotations (1, 3) swap w↔d; even
+ * rotations (0, 2, and absent) leave it unchanged. The origin tile is
+ * unchanged — rotation pivots about the footprint origin.
+ */
+export function effectiveFootprint(placement: GridPlacement): {
+  w: number;
+  d: number;
+} {
+  const { w, d } = placement.footprint;
+  const r = placement.rotation ?? 0;
+  return r % 2 === 0 ? { w, d } : { w: d, d: w };
+}
+
+/**
+ * The integer tiles occupied by a grid placement's footprint, honouring
+ * rotation via effectiveFootprint. Footprint spans [x, x+w) along +x and
+ * [y, y+d) along +y using the EFFECTIVE extents.
  */
 export function footprintTiles(placement: GridPlacement): TilePoint[] {
+  const { w, d } = effectiveFootprint(placement);
   const tiles: TilePoint[] = [];
-  for (let dx = 0; dx < placement.footprint.w; dx++) {
-    for (let dy = 0; dy < placement.footprint.d; dy++) {
+  for (let dx = 0; dx < w; dx++) {
+    for (let dy = 0; dy < d; dy++) {
       tiles.push({ tx: placement.x + dx, ty: placement.y + dy });
     }
   }
@@ -94,8 +113,7 @@ export function footprintTiles(placement: GridPlacement): TilePoint[] {
  */
 export function footprintBaseBBox(placement: GridPlacement): Rect {
   const { x, y } = placement;
-  const w = placement.footprint.w;
-  const d = placement.footprint.d;
+  const { w, d } = effectiveFootprint(placement);
 
   const top = tileToScreen(x, y).y; // north vertex
   const bottom = tileToScreen(x + w, y + d).y; // south vertex

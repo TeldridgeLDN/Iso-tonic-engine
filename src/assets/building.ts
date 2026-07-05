@@ -1,7 +1,7 @@
 // Parametric building generator. Footprint w×d tiles, storeys high.
 // Storey height = 28px. Windows skewed onto the correct face plane.
 
-import { project, polygon, line, group, type Pt } from './primitives.ts';
+import { project, polygon, line, group, readOrientation, type Pt } from './primitives.ts';
 import { INK, PAPER, STROKE, STROKE_THIN, STOREY_H, n } from './style.ts';
 
 export interface BuildingParams {
@@ -96,6 +96,27 @@ function windowsForFace(
     }
     void totalH;
   }
+  return frags.join('');
+}
+
+/**
+ * An entrance door + a small canopy line, drawn on the face described by the
+ * face-point function fp(u,v) (u along the face 0..1, v px up from ground).
+ * Used to give the building a legible "front" so quarter-turns read as
+ * genuinely different facings.
+ */
+function doorForFace(fp: (u: number, v: number) => Pt): string {
+  const uC = 0.5;
+  const halfU = 0.09;
+  const doorH = STOREY_H - 4;
+  const frags: string[] = [];
+  frags.push(
+    faceRect(fp(uC - halfU, 2), fp(uC + halfU, 2), fp(uC + halfU, doorH), fp(uC - halfU, doorH), STROKE_THIN)
+  );
+  // centre mullion (double-door feel)
+  frags.push(line(fp(uC, 2), fp(uC, doorH), 0.6, INK));
+  // canopy lintel line just above the door
+  frags.push(line(fp(uC - halfU - 0.04, doorH + 1.5), fp(uC + halfU + 0.04, doorH + 1.5), 0.8, INK));
   return frags.join('');
 }
 
@@ -204,9 +225,18 @@ function signage(w: number, d: number, baseH: number, s: string): string {
 
 export function renderBuilding(params?: Record<string, unknown>): string {
   const p = normalize(params);
-  const w = p.widthTiles;
-  const d = p.depthTiles;
+  const o = readOrientation(params); // 0–3 quarter-turns clockwise
+
+  // True quarter-turn: odd orientations swap the visible width/depth so the
+  // footprint the box occupies matches core effectiveFootprint().
+  const w = o % 2 === 0 ? p.widthTiles : p.depthTiles;
+  const d = o % 2 === 0 ? p.depthTiles : p.widthTiles;
   const baseH = p.storeys * STOREY_H;
+
+  // Which visible face carries the entrance for this facing:
+  //  o=0 → right (SE), o=1 → left (SW); o=2/3 → entrance faces away (hidden),
+  //  so the two visible faces are dressed as plain elevations.
+  const doorFace: 'left' | 'right' | 'none' = o === 0 ? 'right' : o === 1 ? 'left' : 'none';
 
   const frags: string[] = [];
 
@@ -217,17 +247,19 @@ export function renderBuilding(params?: Record<string, unknown>): string {
   const gW = project(0, d);
   const up = (pt: Pt, h: number): Pt => ({ x: pt.x, y: pt.y - h });
 
-  // Left (SW) face + windows
+  // Left (SW) face + windows (+ door if the entrance faces this way)
   frags.push(
     polygon([gW, gS, up(gS, baseH), up(gW, baseH)], { fill: PAPER, stroke: INK, strokeWidth: STROKE })
   );
   frags.push(windowsForFace((u, v) => leftFacePt(w, d, u, v), p.windowStyle, p.storeys, d));
+  if (doorFace === 'left') frags.push(doorForFace((u, v) => leftFacePt(w, d, u, v)));
 
-  // Right (SE) face + windows
+  // Right (SE) face + windows (+ door if the entrance faces this way)
   frags.push(
     polygon([gS, gE, up(gE, baseH), up(gS, baseH)], { fill: PAPER, stroke: INK, strokeWidth: STROKE })
   );
   frags.push(windowsForFace((u, v) => rightPt(w, d, u, v), p.windowStyle, p.storeys, w));
+  if (doorFace === 'right') frags.push(doorForFace((u, v) => rightPt(w, d, u, v)));
 
   // storey divider lines across both faces
   for (let s = 1; s < p.storeys; s++) {
