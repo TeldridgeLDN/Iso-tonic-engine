@@ -45,17 +45,24 @@ interface Entity {
   placement: GridPlacement | FreePlacement;
   asset: AssetRef;
   anchorEntityId?: string;         // annotations only: leader line target
+  userGoal?: string;               // zones/whole-services: what the user is trying to do
+  orgGoal?: string;                // zones/whole-services: what the organisation wants
+                                   // (both shown in tooltips + generated written description)
 }
 
 interface GridPlacement {
   mode: 'grid';
   x: number; y: number;            // tile coords of footprint origin (integers)
-  footprint: { w: number; d: number };  // tiles along +x / +y
+  footprint: { w: number; d: number };  // tiles along +x / +y, AS AUTHORED (rotation 0)
+  rotation?: 0 | 1 | 2 | 3;        // quarter-turns clockwise; default 0.
+                                   // Effective footprint swaps w/d for odd rotations
+                                   // (always derive via core effectiveFootprint()).
 }
 
 interface FreePlacement {
   mode: 'free';
   x: number; y: number;            // world px (same space as projected tiles)
+  rotation?: 0 | 1 | 2 | 3;        // facing for free assets (figurines: 1|3 = mirrored)
 }
 
 interface AssetRef {

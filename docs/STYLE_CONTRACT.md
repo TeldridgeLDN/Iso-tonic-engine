@@ -69,3 +69,25 @@ interface AssetDef {
 - **Figurine**: parametric (see FigurineParams) — bodies ×2 builds, hair ×5,
   tops ×4, bottoms ×3, accessories ×3, skin tones ×5, standing pose.
 - **Annotation**: angled callout ribbon (parametric text, ACCENT).
+- **Terrain** (landscape family, all `ground`): road segments that follow the
+  tile grid (straight / corner / T-junction — roads act as both connectors and
+  boundaries), river segments, organic-outline region (hand-drawn-feel blob
+  alternative to the rectangular zone plate), island coastline plate (large
+  organic ground plate with shoreline edge treatment).
+- **Zone plaques**: zones support a plaque block — numbered badge (circle +
+  number), title, and a row of small generic user-group icons with labels.
+
+## Orientation (rotation)
+
+- `rotation` lives on the entity's placement: 0–3 quarter-turns clockwise.
+  Effective footprint swaps w↔d on odd rotations (core `effectiveFootprint()`).
+- Assets declare `orientations: 1 | 2 | 4` in the registry (default 1 = fixed).
+  The orientation is passed to `render()` inside params as the reserved key
+  `orientation` (0–3); assets that support 2 orientations treat 1|3 as the
+  mirrored facing.
+- Mirroring (scale(−1,1) about the anchor) is a legitimate way to implement
+  the alternate facing for symmetric-enough assets (vehicles, figurines,
+  furniture). **Text must never mirror** — any text inside an asset is
+  re-rendered upright for every orientation (signage, plaques, labels).
+- Parametric assets (building, zones, terrain) implement true quarter-turns
+  by redrawing with axes swapped, not by transforms.
