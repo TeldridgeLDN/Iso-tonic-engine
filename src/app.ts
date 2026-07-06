@@ -17,6 +17,7 @@ import {
   InteractionController,
   type InteractionHost,
   type Mode,
+  type Tool,
 } from './render/interactions.ts';
 import type { AppContext, PlacementRequest } from './ui/context.ts';
 import { PlacementController } from './ui/placement.ts';
@@ -24,6 +25,7 @@ import { Palette } from './ui/palette.ts';
 import { LayersPanel } from './ui/layersPanel.ts';
 import { PropertiesPanel } from './ui/propertiesPanel.ts';
 import { buildToolbar, type ToolbarHandles } from './ui/toolbar.ts';
+import { buildCanvasToolbar, type CanvasToolbarHandles } from './ui/canvasToolbar.ts';
 import { Wizard } from './ui/wizard.ts';
 import { el, collapsibleColumn } from './ui/dom.ts';
 import { tooltipHtml } from './ui/tooltip.ts';
@@ -39,8 +41,8 @@ interface Ghost {
 export class App implements AppContext {
   history: History;
   private mode: Mode = 'edit';
+  private tool: Tool = 'select';
   private selection: string | undefined;
-  private resizeArmedFlag = false;
   private spotlight: string | undefined;
   private spotlightLayerId: string | undefined;
   private hoverId: string | undefined;
@@ -50,6 +52,7 @@ export class App implements AppContext {
 
   private svg!: SVGSVGElement;
   private sceneRoot!: SVGGElement;
+  private canvasTools!: CanvasToolbarHandles;
   private tooltip!: HTMLDivElement;
   private toast!: HTMLDivElement;
   private toolbar!: ToolbarHandles;
@@ -109,19 +112,38 @@ export class App implements AppContext {
   }
 
   select(id: string | undefined): void {
-    if (id !== this.selection) this.resizeArmedFlag = false;
     this.selection = id;
     this.notifySelection();
     this.render();
   }
 
+  /** The active canvas tool (edit mode). */
+  getTool(): Tool {
+    return this.tool;
+  }
+
+  /**
+   * Switch the canvas tool. Present mode always forces 'select'. Re-renders so
+   * the canvas toolbar, cursor class, and discoverability hint update, and
+   * notifies panels so the properties-panel resize toggle reflects tool state.
+   */
+  setTool(tool: Tool): void {
+    const next = this.mode === 'present' ? 'select' : tool;
+    if (next === this.tool) return;
+    this.tool = next;
+    this.notifySelection();
+    this.render();
+  }
+
+  // Backward-compatible AppContext resize-arming: it now simply mirrors the
+  // resize TOOL. `resizeArmed()` reports tool === 'resize'; `setResizeArmed`
+  // activates/deactivates the tool. Shift+drag remains a select-tool shortcut.
   resizeArmed(): boolean {
-    return this.resizeArmedFlag;
+    return this.tool === 'resize';
   }
 
   setResizeArmed(on: boolean): void {
-    this.resizeArmedFlag = on;
-    this.notifySelection(); // panel toggle re-renders
+    this.setTool(on ? 'resize' : 'select');
   }
 
   onSelectionChange(listener: () => void): () => void {
@@ -190,11 +212,16 @@ export class App implements AppContext {
     this.sceneRoot.setAttribute('data-scene-root', 'true');
     this.svg.appendChild(this.sceneRoot);
 
+    this.canvasTools = buildCanvasToolbar({
+      getTool: () => this.tool,
+      setTool: (t) => this.setTool(t),
+    });
+
     this.tooltip = el('div', { class: 'iso-tooltip' }) as HTMLDivElement;
     this.tooltip.hidden = true;
     this.toast = el('div', { class: 'iso-toast' }) as HTMLDivElement;
     this.toast.hidden = true;
-    stage.append(this.svg, this.tooltip, this.toast);
+    stage.append(this.svg, this.canvasTools.root, this.tooltip, this.toast);
 
     const layers = new LayersPanel(this);
     const props = new PropertiesPanel(this);
@@ -295,6 +322,28 @@ export class App implements AppContext {
       zoomPct: Math.round(this.camera.zoom * 100),
       mode: this.mode,
     });
+
+    this.refreshCanvasTools(renderDoc);
+  }
+
+  /**
+   * Update the floating canvas tool palette: visible only in edit mode, active
+   * tool highlighted, crosshair cursor while the resize tool is active, and a
+   * subtle hint when a resizable zone is selected in the select tool.
+   */
+  private refreshCanvasTools(doc: SceneDocument): void {
+    const editing = this.mode === 'edit';
+    this.canvasTools.root.hidden = !editing;
+    this.svg.classList.toggle('is-resizing', editing && this.tool === 'resize');
+
+    let hint: string | undefined;
+    if (editing && this.tool === 'select' && this.selection) {
+      const entity = byId(doc, this.selection);
+      if (entity && isResizable(entity, getAsset(entity.asset.symbol))) {
+        hint = 'Resize: drag the orange corner, hold Shift, or use the ⤡ tool';
+      }
+    }
+    this.canvasTools.refresh({ tool: this.tool, hint });
   }
 
   /**
@@ -324,7 +373,8 @@ export class App implements AppContext {
       history: this.history,
       getMode: () => this.mode,
       getSelectedId: () => this.selection,
-      getResizeArmed: () => this.resizeArmedFlag,
+      getResizeArmed: () => this.tool === 'resize',
+      getTool: () => this.tool,
       getCamera: () => this.camera,
       panCamera: (next) => {
         this.camera = next;
@@ -337,7 +387,6 @@ export class App implements AppContext {
           this.placement.commit();
           return;
         }
-        if (id !== this.selection) this.resizeArmedFlag = false;
         this.selection = id;
         this.notifySelection();
         this.render();
@@ -403,7 +452,8 @@ export class App implements AppContext {
 
   private toggleMode(): void {
     this.mode = this.mode === 'edit' ? 'present' : 'edit';
-    this.resizeArmedFlag = false;
+    // Present mode has no zone resizing — force the tool back to select.
+    if (this.mode === 'present') this.tool = 'select';
     this.selection = undefined;
     this.spotlight = undefined;
     this.spotlightLayerId = undefined;
@@ -471,6 +521,11 @@ export class App implements AppContext {
       }
       // Cancel an in-progress resize/move drag before clearing selection.
       if (this.controller?.cancelDrag()) return;
+      // Escape also returns to the select tool (SimCity convention).
+      if (this.tool !== 'select') {
+        this.setTool('select');
+        return;
+      }
       if (!typing) {
         this.selection = undefined;
         this.spotlight = undefined;
@@ -490,6 +545,17 @@ export class App implements AppContext {
       if (this.selection && !this.placement.active) {
         evt.preventDefault();
         this.rotateSelected();
+      }
+    }
+    // Tool shortcuts (edit mode, not while typing): V = select, Z = resize.
+    if (!typing && !meta && this.mode === 'edit' && !this.placement.active) {
+      const k = evt.key.toLowerCase();
+      if (k === 'v') {
+        evt.preventDefault();
+        this.setTool('select');
+      } else if (k === 'z') {
+        evt.preventDefault();
+        this.setTool('resize');
       }
     }
   };

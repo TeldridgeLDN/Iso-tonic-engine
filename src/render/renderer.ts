@@ -186,6 +186,9 @@ function renderResizeHandle(placement: GridPlacement): string {
     `M ${cx} ${cy - r} L ${cx + r} ${cy} L ${cx} ${cy + r} L ${cx - r} ${cy} Z`;
   return (
     `<g data-editor-only="true" data-resize-handle="true">` +
+    // Invisible, forgiving hit target (r≈14) behind the visible diamond so a
+    // grab a few px off-centre still starts a resize.
+    `<circle cx="${cx}" cy="${cy}" r="14" fill="#FFFFFF" fill-opacity="0"/>` +
     `<path d="${diamond}" fill="${ACCENT}" stroke="#fff" stroke-width="1.5"/>` +
     `</g>`
   );

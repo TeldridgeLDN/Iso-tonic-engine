@@ -19,7 +19,12 @@ import { MoveEntity, ResizeEntity, type History } from '../core/commands.ts';
 import type { Camera } from '../core/model.ts';
 import { panBy, screenToWorld, wheelZoom } from './camera.ts';
 import { getAsset } from '../assets/library.ts';
-import { isResizable, resizeBounds, resolveResizeDrag } from './resize.ts';
+import {
+  isResizable,
+  resizeBounds,
+  resolveResizeDrag,
+  resolveResizeTarget,
+} from './resize.ts';
 
 // ---------------------------------------------------------------------------
 // Pure drop resolution (unit-tested)
@@ -139,6 +144,9 @@ export function resolveFreeDrop(
 
 export type Mode = 'edit' | 'present';
 
+/** Canvas interaction tool (edit mode): move/select entities, or resize zones. */
+export type Tool = 'select' | 'resize';
+
 export interface InteractionHost {
   history: History;
   getMode(): Mode;
@@ -150,6 +158,8 @@ export interface InteractionHost {
   getSelectedId?(): string | undefined;
   /** When true, dragging a resizable zone resizes it without needing Shift. */
   getResizeArmed?(): boolean;
+  /** The active canvas tool (edit mode). Defaults to 'select' when absent. */
+  getTool?(): Tool;
   /** Called when the spotlight focus changes (present mode). */
   onSpotlight(id: string | undefined): void;
   /** Called on hover change so the app can re-render + position the tooltip. */
@@ -170,7 +180,17 @@ type DragState =
       moved: boolean;
     }
   | { kind: 'resize'; entityId: string; candidate?: GridPlacement }
-  | { kind: 'pending'; startX: number; startY: number; entityId?: string };
+  | {
+      kind: 'pending';
+      startX: number;
+      startY: number;
+      entityId?: string;
+      /**
+       * Resize-tool only: the zone this press would resize once it becomes a
+       * drag. A plain click still selects `entityId`; a drag resizes this.
+       */
+      resizeTargetId?: string;
+    };
 
 const DRAG_THRESHOLD = 3; // px before a press becomes a drag
 
@@ -264,6 +284,31 @@ export class InteractionController {
       }
     }
 
+    // Resize TOOL (explicit, SimCity-style): a press resolves the target zone as
+    // (a) the resizable zone under the pointer, else (b) the currently-selected
+    // resizable zone. A drag resizes that zone; a plain click still selects the
+    // pressed entity so the panel follows; a miss (no target, no pressed entity)
+    // is a pure no-op — we never fall through to pan or entity move here.
+    if (this.host.getMode() === 'edit' && this.host.getTool?.() === 'resize') {
+      const doc = this.host.history.document;
+      const pressedId = this.entityIdAt(evt);
+      const pressed = pressedId ? byId(doc, pressedId) : undefined;
+      const selectedId = this.host.getSelectedId?.();
+      const selected = selectedId ? byId(doc, selectedId) : undefined;
+      const target = resolveResizeTarget(pressed, selected, (e) =>
+        getAsset(e.asset.symbol)
+      );
+      const lp = this.localPoint(evt);
+      this.drag = {
+        kind: 'pending',
+        startX: lp.x,
+        startY: lp.y,
+        entityId: pressedId,
+        resizeTargetId: target?.id,
+      };
+      return;
+    }
+
     // Shift+drag (or the panel's armed "Adjust size" toggle) resizes instead
     // of moving: the zone under the pointer if it's resizable, else the
     // current selection. Selecting it first keeps the handle/ghost
@@ -308,6 +353,19 @@ export class InteractionController {
       const lp = this.localPoint(evt);
       const dist = Math.hypot(lp.x - this.drag.startX, lp.y - this.drag.startY);
       if (dist >= DRAG_THRESHOLD) {
+        // Resize tool: a drag resizes the resolved zone. If nothing resolved
+        // (empty press), the drag is a deliberate no-op — never pan/move.
+        if (this.host.getMode() === 'edit' && this.host.getTool?.() === 'resize') {
+          const targetId = this.drag.resizeTargetId;
+          if (targetId) {
+            this.host.onSelect(targetId);
+            this.drag = { kind: 'resize', entityId: targetId };
+            this.updateResizeGhost(evt);
+          } else {
+            this.drag = { kind: 'none' };
+          }
+          return;
+        }
         const editable =
           this.host.getMode() === 'edit' && this.drag.entityId !== undefined;
         if (editable) {

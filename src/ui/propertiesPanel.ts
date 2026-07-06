@@ -195,21 +195,23 @@ export class PropertiesPanel {
   }
 
   /**
-   * ⤡ Adjust-size toggle for resizable zones. While ON, dragging the zone on
-   * the map resizes it (Shift+drag and the corner handle always work too).
+   * ⤡ Resize-tool toggle for resizable zones. Activates/deactivates the canvas
+   * resize TOOL (the same one on the floating canvas palette). While ON, drag
+   * anywhere on a zone to resize it; Shift+drag and the corner handle work any
+   * time in the select tool too.
    */
   private resizeControl(entity: Entity): HTMLElement | null {
     const def = getAsset(entity.asset.symbol);
     if (!isResizable(entity, def)) return null;
 
-    const armed = this.ctx.resizeArmed();
+    const on = this.ctx.resizeArmed();
     const btn = button(
-      armed ? '⤡ Adjust size: ON — drag the zone' : '⤡ Adjust size: OFF',
+      on ? '⤡ Resize tool: ON — drag the zone' : '⤡ Resize tool: OFF',
       () => this.ctx.setResizeArmed(!this.ctx.resizeArmed()),
-      `iso-btn iso-btn-sm iso-resize-btn${armed ? ' iso-btn-armed' : ''}`
+      `iso-btn iso-btn-sm iso-resize-btn${on ? ' iso-btn-armed' : ''}`
     );
     btn.title =
-      'Toggle drag-to-resize. While on, dragging this zone changes its size. ' +
+      'Toggle the resize tool. While on, dragging this zone changes its size. ' +
       'Shift+drag or the corner handle work any time.';
     return field('Size', btn);
   }

@@ -112,6 +112,35 @@ export function resolveResizeDrag(
 }
 
 /**
+ * Resolve which zone a resize-tool press should target (pure, unit-tested).
+ *
+ * SimCity-forgiving rule:
+ *   1. If the entity directly under the pointer is a resizable zone → target it.
+ *   2. Otherwise, if a zone is already selected and it's resizable → fall back to
+ *      it (so a press landing on a nested figurine, or just missing, still
+ *      resizes the selected zone).
+ *   3. Otherwise → no target (the press is a no-op; do NOT pan or move).
+ *
+ * Both entities are looked up via `resizableOf`, which returns each entity's
+ * asset def (or undefined). Keeping the def-lookup as a callback means this
+ * module stays free of the asset library dependency.
+ *
+ * @param pressed   entity directly under the pointer (or undefined)
+ * @param selected  currently-selected entity (or undefined)
+ * @param defOf     maps an entity to its ResizeAssetDef (undefined if unknown)
+ * @returns the entity to resize, or undefined for a no-op
+ */
+export function resolveResizeTarget(
+  pressed: Entity | undefined,
+  selected: Entity | undefined,
+  defOf: (entity: Entity) => ResizeAssetDef | undefined
+): Entity | undefined {
+  if (pressed && isResizable(pressed, defOf(pressed))) return pressed;
+  if (selected && isResizable(selected, defOf(selected))) return selected;
+  return undefined;
+}
+
+/**
  * Screen (world-px) position of the resize handle: the far corner of the
  * EFFECTIVE footprint (south vertex of the footprint diamond), i.e. the tile
  * corner opposite the origin. For a placement at (x,y) with effective wEff×dEff
