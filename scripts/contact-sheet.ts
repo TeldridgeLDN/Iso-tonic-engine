@@ -23,6 +23,7 @@ import {
 } from '../src/assets/terrain.ts';
 import { renderZone } from '../src/assets/zones.ts';
 import { van } from '../src/assets/symbols/vehicles.ts';
+import { deskSingle, deskMeeting, deskReception } from '../src/assets/symbols/desks.ts';
 import { shopFront, cornerShop, cafeSeating, marketStall } from '../src/assets/symbols/highstreet.ts';
 import { GRID_GREY, INK } from '../src/assets/style.ts';
 
@@ -247,6 +248,33 @@ function buildSpecialSections(topY: number): Section {
     }
   }
   y += 160;
+
+  // --- 3b. Staffed-desk orientation strip -------------------------------
+  parts.push(sectionTitle(left, y + 4, 'Staffed desks — desk-single (×2), desk-meeting (×2), desk-reception (×4)'));
+  y += 20;
+  {
+    const rowY = y + 100;
+    let x = left + 90;
+    for (const o of [0, 1]) {
+      parts.push(`<g transform="translate(${x} ${rowY})">${gridDiamonds(2, 1)}${deskSingle({ orientation: o })}</g>`);
+      parts.push(labelSmall(x - 20, rowY + 45, `desk-single o${o}`));
+      x += 190;
+    }
+    for (const o of [0, 1]) {
+      parts.push(`<g transform="translate(${x} ${rowY})">${gridDiamonds(2, 1)}${deskMeeting({ orientation: o })}</g>`);
+      parts.push(labelSmall(x - 20, rowY + 45, `desk-meeting o${o}`));
+      x += 190;
+    }
+    // reception 4 facings on a second row
+    const rowY2 = rowY + 150;
+    let x2 = left + 100;
+    for (const o of [0, 1, 2, 3]) {
+      parts.push(`<g transform="translate(${x2} ${rowY2})">${gridDiamonds(2, 2)}${deskReception({ orientation: o })}</g>`);
+      parts.push(labelSmall(x2 - 20, rowY2 + 55, `reception o${o}`));
+      x2 += 200;
+    }
+  }
+  y += 320;
 
   // --- 4. High-street set -----------------------------------------------
   parts.push(sectionTitle(left, y + 4, 'High-street set — shop-front, corner-shop, café seating, market stall'));

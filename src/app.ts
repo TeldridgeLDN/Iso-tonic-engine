@@ -4,12 +4,14 @@
 // the toolbar, and the interview wizard. Placement mode (from the palette) is
 // owned here: a ghost follows the cursor and a canvas click commits PlaceEntity.
 
-import type { Camera, Entity, Placement, SceneDocument } from './core/model.ts';
+import type { Camera, Entity, GridPlacement, Placement, SceneDocument } from './core/model.ts';
 import { byId } from './core/model.ts';
 import { History, RotateEntity } from './core/commands.ts';
 import { planRotation } from './render/rotation.ts';
 import { presentSpotlight } from './render/spotlight.ts';
 import { renderScene, type ViewState } from './render/renderer.ts';
+import { isResizable } from './render/resize.ts';
+import { getAsset } from './assets/library.ts';
 import { defaultCamera, screenToWorld, viewBoxAttr, viewBoxFor } from './render/camera.ts';
 import {
   InteractionController,
@@ -246,10 +248,12 @@ export class App implements AppContext {
     const h = rect.height || 600;
     this.svg.setAttribute('viewBox', viewBoxAttr(viewBoxFor(this.camera, w, h)));
 
+    const renderDoc = this.renderDoc();
     const view: ViewState = {
       selectedId: this.mode === 'edit' ? this.selection : undefined,
       hoverId: this.hoverId,
       showGrid: this.mode === 'edit',
+      resizeHandleFor: this.resizeHandlePlacement(renderDoc),
     };
 
     if (this.mode === 'present') {
@@ -260,7 +264,7 @@ export class App implements AppContext {
       });
     }
 
-    renderScene(this.sceneRoot, this.renderDoc(), view);
+    renderScene(this.sceneRoot, renderDoc, view);
 
     if (this.ghost?.rejected) {
       this.markRejected(this.ghost.id);
@@ -282,6 +286,21 @@ export class App implements AppContext {
     });
   }
 
+  /**
+   * The grid placement to draw the resize handle for: the selected entity, in
+   * edit mode, when it's a resizable zone and no placement is in progress. Read
+   * from `doc` (the render doc) so the handle tracks any live resize ghost.
+   */
+  private resizeHandlePlacement(doc: SceneDocument): GridPlacement | undefined {
+    if (this.mode !== 'edit' || !this.selection || this.placement.active) {
+      return undefined;
+    }
+    const entity = byId(doc, this.selection);
+    if (!entity || entity.placement.mode !== 'grid') return undefined;
+    if (!isResizable(entity, getAsset(entity.asset.symbol))) return undefined;
+    return entity.placement;
+  }
+
   private markRejected(id: string): void {
     const el2 = this.sceneRoot.querySelector(`[data-entity-id="${id}"]`);
     el2?.setAttribute('data-rejected', 'true');
@@ -293,6 +312,7 @@ export class App implements AppContext {
     return {
       history: this.history,
       getMode: () => this.mode,
+      getSelectedId: () => this.selection,
       getCamera: () => this.camera,
       panCamera: (next) => {
         this.camera = next;
@@ -435,6 +455,8 @@ export class App implements AppContext {
         this.cancelPlacement();
         return;
       }
+      // Cancel an in-progress resize/move drag before clearing selection.
+      if (this.controller?.cancelDrag()) return;
       if (!typing) {
         this.selection = undefined;
         this.spotlight = undefined;

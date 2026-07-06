@@ -14,8 +14,10 @@ import {
   UpdateEntityProps,
   AssignLayers,
   DeleteEntity,
+  ResizeEntity,
 } from '../core/commands.ts';
 import { getAsset, type ParamField } from '../assets/library.ts';
+import { isResizable, resizeBounds } from '../render/resize.ts';
 import type { AppContext } from './context.ts';
 import { el, button, field, clear } from './dom.ts';
 import { FigurineEditor, isFigurine } from './figurineEditor.ts';
@@ -259,6 +261,16 @@ export class PropertiesPanel {
     params: Record<string, unknown>
   ): HTMLElement {
     const commit = (value: unknown): void => {
+      // Zone w/d edits must move BOTH placement.footprint AND params in lockstep
+      // (identical to a handle drag) — route them through ResizeEntity. Any other
+      // param is a plain props patch.
+      if (
+        (f.key === 'w' || f.key === 'd') &&
+        typeof value === 'number' &&
+        this.routeResize(entity, f.key, value)
+      ) {
+        return;
+      }
       this.ctx.history.execute(
         new UpdateEntityProps(entity.id, { params: { [f.key]: value } })
       );
@@ -307,6 +319,30 @@ export class PropertiesPanel {
     input.value = raw !== undefined ? String(raw) : '';
     commitOn(input, () => commit(input.value));
     return field(f.label, input);
+  }
+
+  /**
+   * Route a zone w/d param edit through ResizeEntity so the footprint and params
+   * stay in sync (matching the canvas handle). Returns false when the entity is
+   * not a resizable grid zone (caller then does a plain UpdateEntityProps).
+   * params.w/d are AUTHORED extents mirroring placement.footprint.
+   */
+  private routeResize(entity: Entity, key: 'w' | 'd', value: number): boolean {
+    const def = getAsset(entity.asset.symbol);
+    if (!isResizable(entity, def)) return false;
+    if (entity.placement.mode !== 'grid') return false;
+
+    const bounds = resizeBounds(def);
+    const b = key === 'w' ? bounds.w : bounds.d;
+    const clamped = Math.min(b.max, Math.max(b.min, Math.round(value)));
+
+    const from = entity.placement.footprint;
+    const to = key === 'w' ? { w: clamped, d: from.d } : { w: from.w, d: clamped };
+    if (to.w === from.w && to.d === from.d) return true; // no-op, but handled
+    this.ctx.history.execute(
+      new ResizeEntity({ entityId: entity.id, from, to })
+    );
+    return true;
   }
 
   private deleteButton(entity: Entity): HTMLElement {

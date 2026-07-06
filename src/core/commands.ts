@@ -7,6 +7,7 @@ import type {
   Entity,
   CustomLayer,
   Placement,
+  GridPlacement,
   FigurineParams,
   EntityType,
 } from './model.ts';
@@ -138,6 +139,98 @@ export class MoveEntity implements Command {
     if (!this.prev) throw new Error('MoveEntity: invert before apply');
     const prev = this.prev;
     return mapEntity(doc, this.id, (ent) => ({ ...ent, placement: prev }));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ResizeEntity (grid zones)
+// ---------------------------------------------------------------------------
+
+/**
+ * Resize a grid entity's footprint tile-by-tile. `from`/`to` are AUTHORED
+ * (rotation-0) {w,d} extents — the interaction layer converts effective↔authored
+ * so this command stays dumb. Updates BOTH placement.footprint AND, when the
+ * asset carries numeric w/d params (zone assets), asset.params.w/d, keeping the
+ * two in sync. Assets without w/d params only change their footprint.
+ *
+ * Invert restores the prior footprint and params exactly (including whether a
+ * w/d param key was present at all, so a params-less asset stays params-less).
+ */
+export class ResizeEntity implements Command {
+  label = 'Resize entity';
+  private readonly id: string;
+  private readonly to: { w: number; d: number };
+  // Captured prior state at apply-time for an exact invert (robust against a
+  // stale `from`, mirroring MoveEntity's capture pattern).
+  private prevFootprint?: { w: number; d: number };
+  private prevWPresent = false;
+  private prevDPresent = false;
+  private prevW?: unknown;
+  private prevD?: unknown;
+
+  constructor(args: {
+    entityId: string;
+    from: { w: number; d: number };
+    to: { w: number; d: number };
+  }) {
+    this.id = args.entityId;
+    // `from` is part of the command's declared shape (authored prior extents);
+    // invert restores the actual captured prior footprint, so it isn't stored.
+    this.to = args.to;
+  }
+
+  apply(doc: SceneDocument): SceneDocument {
+    const e = requireEntity(doc, this.id);
+    if (e.placement.mode !== 'grid') {
+      throw new Error(`ResizeEntity: "${this.id}" is not a grid placement`);
+    }
+    this.prevFootprint = e.placement.footprint;
+    const params = e.asset.params ?? {};
+    this.prevWPresent = 'w' in params;
+    this.prevDPresent = 'd' in params;
+    this.prevW = params.w;
+    this.prevD = params.d;
+
+    const to = this.to;
+    const syncParams = this.prevWPresent || this.prevDPresent;
+    return mapEntity(doc, this.id, (ent) => {
+      const placement = ent.placement as GridPlacement;
+      const next: Entity = {
+        ...ent,
+        placement: { ...placement, footprint: { w: to.w, d: to.d } },
+      };
+      // Sync w/d params only if the asset already exposes them (zones do),
+      // mirroring how zone assets are always authored with w/d in params.
+      if (syncParams) {
+        next.asset = {
+          ...ent.asset,
+          params: { ...(ent.asset.params ?? {}), w: to.w, d: to.d },
+        };
+      }
+      return next;
+    });
+  }
+
+  invert(doc: SceneDocument): SceneDocument {
+    if (!this.prevFootprint) throw new Error('ResizeEntity: invert before apply');
+    const prevFootprint = this.prevFootprint;
+    const syncParams = this.prevWPresent || this.prevDPresent;
+    return mapEntity(doc, this.id, (ent) => {
+      const placement = ent.placement as GridPlacement;
+      const next: Entity = {
+        ...ent,
+        placement: { ...placement, footprint: prevFootprint },
+      };
+      if (syncParams) {
+        const params: Record<string, unknown> = { ...(ent.asset.params ?? {}) };
+        if (this.prevWPresent) params.w = this.prevW;
+        else delete params.w;
+        if (this.prevDPresent) params.d = this.prevD;
+        else delete params.d;
+        next.asset = { ...ent.asset, params };
+      }
+      return next;
+    });
   }
 }
 

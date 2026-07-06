@@ -6,12 +6,13 @@
 // At ~200 entities an innerHTML rebuild per change is comfortably fast, so we
 // keep it simple (no diffing).
 
-import type { Entity, SceneDocument } from '../core/model.ts';
+import type { Entity, GridPlacement, SceneDocument } from '../core/model.ts';
 import { isEntityVisible } from '../core/model.ts';
 import { sortForRender } from '../core/depth.ts';
 import { tileToScreen } from '../core/iso.ts';
 import { getAsset } from '../assets/library.ts';
-import { INK } from '../assets/style.ts';
+import { INK, ACCENT } from '../assets/style.ts';
+import { resizeHandleScreen } from './resize.ts';
 
 export interface ViewState {
   /** id of the entity under a persistent emphasis (selection). */
@@ -25,6 +26,12 @@ export interface ViewState {
   spotlightIds?: Set<string>;
   /** Draw the faint editor grid dots (edit mode only, stripped from export). */
   showGrid?: boolean;
+  /**
+   * Grid placement of the currently-selected RESIZABLE entity (edit mode only).
+   * When set, an ACCENT diamond resize handle is drawn at the far corner of its
+   * effective footprint, inside a data-editor-only group (never exported).
+   */
+  resizeHandleFor?: GridPlacement;
 }
 
 const DIM = 0.15; // DIM_OPACITY per style contract
@@ -160,7 +167,28 @@ export function renderScene(
     parts.push(renderEntity(entity, view));
   }
 
+  if (view.resizeHandleFor) parts.push(renderResizeHandle(view.resizeHandleFor));
+
   sceneRoot.innerHTML = parts.join('');
+}
+
+/**
+ * The resize handle: a small ACCENT diamond at the projected far corner of the
+ * effective footprint. Wrapped in a data-editor-only group (stripped on export)
+ * and tagged data-resize-handle so the interaction layer can hit-test it.
+ */
+function renderResizeHandle(placement: GridPlacement): string {
+  const p = resizeHandleScreen(placement);
+  const cx = round(p.x);
+  const cy = round(p.y);
+  const r = 6; // half-diagonal of the diamond in world px
+  const diamond =
+    `M ${cx} ${cy - r} L ${cx + r} ${cy} L ${cx} ${cy + r} L ${cx - r} ${cy} Z`;
+  return (
+    `<g data-editor-only="true" data-resize-handle="true">` +
+    `<path d="${diamond}" fill="${ACCENT}" stroke="#fff" stroke-width="1.5"/>` +
+    `</g>`
+  );
 }
 
 /** Ground-plane assets (zone plates) always render beneath structures. */

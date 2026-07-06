@@ -17,6 +17,7 @@ import { renderCallout } from './callout.ts';
 import { serverRack, desktopWorkstation, laptopDesk, wallScreen, telephone, networkMast } from './symbols/digital.ts';
 import { van, car, tram } from './symbols/vehicles.ts';
 import { deskCluster, meetingTable, shelving, barrier } from './symbols/furniture.ts';
+import { deskSingle, deskMeeting, deskReception } from './symbols/desks.ts';
 import { treeRound, treeConifer, planter, streetLamp, signpost } from './symbols/street.ts';
 import { shopFront, cornerShop, cafeSeating, marketStall } from './symbols/highstreet.ts';
 import { SKIN_TONES, HAIR_COLORS } from './style.ts';
@@ -180,6 +181,9 @@ const ASSETS: AssetDef[] = [
   // Furniture (props)
   { id: 'desk-cluster', category: 'prop', footprint: { w: 2, d: 2 }, orientations: 2, render: deskCluster },
   { id: 'meeting-table', category: 'prop', footprint: { w: 2, d: 1 }, orientations: 2, render: meetingTable },
+  { id: 'desk-single', category: 'prop', footprint: { w: 2, d: 1 }, orientations: 2, render: deskSingle },
+  { id: 'desk-meeting', category: 'prop', footprint: { w: 2, d: 1 }, orientations: 2, render: deskMeeting },
+  { id: 'desk-reception', category: 'prop', footprint: { w: 2, d: 2 }, orientations: 4, render: deskReception },
   { id: 'shelving', category: 'prop', footprint: { w: 1, d: 1 }, orientations: 2, render: shelving },
   { id: 'barrier', category: 'prop', footprint: { w: 1, d: 1 }, render: barrier },
 

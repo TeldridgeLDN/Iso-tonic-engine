@@ -15,9 +15,11 @@
 import type { Entity, GridPlacement, Placement, SceneDocument } from '../core/model.ts';
 import { byId, footprintsOverlap } from '../core/model.ts';
 import { screenToTile, snapToTile, tileToScreen } from '../core/iso.ts';
-import { MoveEntity, type History } from '../core/commands.ts';
+import { MoveEntity, ResizeEntity, type History } from '../core/commands.ts';
 import type { Camera } from '../core/model.ts';
 import { panBy, screenToWorld, wheelZoom } from './camera.ts';
+import { getAsset } from '../assets/library.ts';
+import { isResizable, resizeBounds, resolveResizeDrag } from './resize.ts';
 
 // ---------------------------------------------------------------------------
 // Pure drop resolution (unit-tested)
@@ -84,6 +86,39 @@ export function resolveGridDrop(
   return { placement, accepted: !collides, unchanged };
 }
 
+/**
+ * Resolve a resize drag for a grid zone entity into a candidate GridPlacement
+ * carrying the new AUTHORED footprint (origin + rotation unchanged). The pointer
+ * world position is converted to fractional effective tiles and clamped via the
+ * asset's w/d bounds. Returns undefined if the entity isn't resizable.
+ *
+ * No collision test: zones legitimately contain nested entities, so a resize is
+ * never rejected against its contents (per the user story).
+ */
+export function resolveResize(
+  entity: Entity,
+  worldNow: { x: number; y: number }
+): GridPlacement | undefined {
+  const def = getAsset(entity.asset.symbol);
+  if (!isResizable(entity, def)) return undefined;
+  const p = entity.placement as GridPlacement;
+  const bounds = resizeBounds(def);
+  const pointerTile = screenToTile(worldNow.x, worldNow.y);
+  const authored = resolveResizeDrag(
+    { tx: p.x, ty: p.y },
+    pointerTile,
+    bounds,
+    (p.rotation ?? 0) as 0 | 1 | 2 | 3
+  );
+  return {
+    mode: 'grid',
+    x: p.x,
+    y: p.y,
+    footprint: authored,
+    ...(p.rotation !== undefined ? { rotation: p.rotation } : {}),
+  };
+}
+
 /** World-px position a FREE entity should move to for a given pointer delta. */
 export function resolveFreeDrop(
   entity: Entity,
@@ -111,6 +146,8 @@ export interface InteractionHost {
   panCamera(next: Camera): void;
   /** Called when selection changes (edit mode). id or undefined to clear. */
   onSelect(id: string | undefined): void;
+  /** Current selection id (edit mode) — used to resolve the resize handle's owner. */
+  getSelectedId?(): string | undefined;
   /** Called when the spotlight focus changes (present mode). */
   onSpotlight(id: string | undefined): void;
   /** Called on hover change so the app can re-render + position the tooltip. */
@@ -130,6 +167,7 @@ type DragState =
       worldStart: { x: number; y: number };
       moved: boolean;
     }
+  | { kind: 'resize'; entityId: string; candidate?: GridPlacement }
   | { kind: 'pending'; startX: number; startY: number; entityId?: string };
 
 const DRAG_THRESHOLD = 3; // px before a press becomes a drag
@@ -148,6 +186,21 @@ export class InteractionController {
     svg.addEventListener('pointerup', this.onPointerUp);
     svg.addEventListener('pointerleave', this.onPointerLeave);
     svg.addEventListener('wheel', this.onWheel, { passive: false });
+  }
+
+  /**
+   * Cancel an in-progress drag (resize / entity move) without committing.
+   * Used by Escape. Clears any live ghost and re-renders. Returns true if a
+   * drag was actually cancelled.
+   */
+  cancelDrag(): boolean {
+    if (this.drag.kind === 'resize' || this.drag.kind === 'entity') {
+      this.drag = { kind: 'none' };
+      this.host.setGhost?.(undefined, undefined, false);
+      this.host.requestRender();
+      return true;
+    }
+    return false;
   }
 
   dispose(): void {
@@ -193,10 +246,32 @@ export class InteractionController {
   private onPointerDown = (evt: PointerEvent): void => {
     if (evt.button !== 0) return;
     this.svg.setPointerCapture(evt.pointerId);
+
+    // Resize handle wins over entity-drag and pan. Only in edit mode, and only
+    // when the pressed element is (inside) the handle for the selected entity.
+    if (this.host.getMode() === 'edit' && this.isResizeHandleAt(evt)) {
+      const id = this.host.getSelectedId?.();
+      const entity = id ? byId(this.host.history.document, id) : undefined;
+      if (entity && entity.placement.mode === 'grid') {
+        this.drag = { kind: 'resize', entityId: entity.id };
+        return;
+      }
+    }
+
     const entityId = this.entityIdAt(evt);
     const lp = this.localPoint(evt);
     this.drag = { kind: 'pending', startX: lp.x, startY: lp.y, entityId };
   };
+
+  /** True if the pressed target is (within) a resize-handle group. */
+  private isResizeHandleAt(evt: PointerEvent): boolean {
+    let el = evt.target as Element | null;
+    while (el && el !== this.svg) {
+      if (el.getAttribute?.('data-resize-handle') === 'true') return true;
+      el = el.parentElement;
+    }
+    return false;
+  }
 
   private onPointerMove = (evt: PointerEvent): void => {
     // Promote a pending press into a drag once past threshold.
@@ -234,8 +309,25 @@ export class InteractionController {
       return;
     }
 
+    if (this.drag.kind === 'resize') {
+      this.updateResizeGhost(evt);
+      return;
+    }
+
     // Not dragging: hover tracking.
     this.updateHover(evt);
+  }
+
+  private updateResizeGhost(evt: PointerEvent): void {
+    if (this.drag.kind !== 'resize') return;
+    const entity = byId(this.host.history.document, this.drag.entityId);
+    if (!entity) return;
+    const candidate = resolveResize(entity, this.worldPoint(evt));
+    if (!candidate) return;
+    this.drag.candidate = candidate;
+    // Never rejected: zones legitimately contain their nested entities.
+    this.host.setGhost?.(entity.id, candidate, false);
+    this.host.requestRender();
   };
 
   private updateGhost(evt: PointerEvent): void {
@@ -264,6 +356,8 @@ export class InteractionController {
 
     if (this.drag.kind === 'entity') {
       this.commitDrag(evt);
+    } else if (this.drag.kind === 'resize') {
+      this.commitResize(evt);
     } else if (this.drag.kind === 'pending') {
       // A click (no drag past threshold).
       this.handleClick(this.drag.entityId);
@@ -298,6 +392,21 @@ export class InteractionController {
       const same = next.x === entity.placement.x && next.y === entity.placement.y;
       if (!same) this.host.history.execute(new MoveEntity(entity.id, next));
     }
+  }
+
+  private commitResize(evt: PointerEvent): void {
+    if (this.drag.kind !== 'resize') return;
+    const entity = byId(this.host.history.document, this.drag.entityId);
+    if (!entity || entity.placement.mode !== 'grid') return;
+    const candidate = resolveResize(entity, this.worldPoint(evt));
+    if (!candidate) return;
+
+    const from = entity.placement.footprint;
+    const to = candidate.footprint;
+    if (to.w === from.w && to.d === from.d) return; // no-op
+    this.host.history.execute(
+      new ResizeEntity({ entityId: entity.id, from, to })
+    );
   }
 
   private handleClick(entityId: string | undefined): void {
