@@ -3,6 +3,7 @@ import {
   isResizable,
   resizeBounds,
   resolveResizeDrag,
+  resolveResizeTarget,
   resizeHandleScreen,
   DEFAULT_MIN,
   DEFAULT_MAX,
@@ -225,5 +226,54 @@ describe('ResizeEntity', () => {
     const doc = docWith(free);
     const cmd = new ResizeEntity({ entityId: 'z', from: { w: 1, d: 1 }, to: { w: 2, d: 2 } });
     expect(() => cmd.apply(doc)).toThrow(/not a grid placement/);
+  });
+});
+
+// --- resolveResizeTarget (resize-tool press target resolution) --------------
+
+describe('resolveResizeTarget', () => {
+  // A non-resizable entity (figurine): no ground / no w,d params.
+  const figurineDef: ResizeAssetDef = { ground: false, paramSchema: [] };
+  const figurine: Entity = {
+    id: 'fig',
+    type: 'user',
+    label: 'fig',
+    placement: { mode: 'grid', x: 1, y: 1, footprint: { w: 1, d: 1 } },
+    asset: { symbol: 'figurine' },
+  };
+  const zone = zoneEntity();
+
+  // def lookup keyed by asset symbol.
+  const defOf = (e: Entity): ResizeAssetDef | undefined =>
+    e.asset.symbol === 'department-zone' ? zoneDef : figurineDef;
+
+  it('targets the resizable zone directly under the pointer', () => {
+    expect(resolveResizeTarget(zone, undefined, defOf)).toBe(zone);
+  });
+
+  it('falls back to the selected resizable zone when the press lands on a non-resizable entity', () => {
+    // pressed a figurine INSIDE the selected zone → resize the zone.
+    expect(resolveResizeTarget(figurine, zone, defOf)).toBe(zone);
+  });
+
+  it('falls back to the selected zone when the press misses everything', () => {
+    expect(resolveResizeTarget(undefined, zone, defOf)).toBe(zone);
+  });
+
+  it('prefers the pressed zone over a different selected zone', () => {
+    const other = zoneEntity({ id: 'z2' });
+    expect(resolveResizeTarget(zone, other, defOf)).toBe(zone);
+  });
+
+  it('returns undefined when nothing resolves (empty press, no selection)', () => {
+    expect(resolveResizeTarget(undefined, undefined, defOf)).toBeUndefined();
+  });
+
+  it('returns undefined when press is non-resizable and selection is non-resizable', () => {
+    expect(resolveResizeTarget(figurine, figurine, defOf)).toBeUndefined();
+  });
+
+  it('ignores a pressed non-resizable entity but still returns undefined without a resizable selection', () => {
+    expect(resolveResizeTarget(figurine, undefined, defOf)).toBeUndefined();
   });
 });
