@@ -18,8 +18,10 @@ import { serverRack, desktopWorkstation, laptopDesk, wallScreen, telephone, netw
 import { van, car, tram } from './symbols/vehicles.ts';
 import { deskCluster, meetingTable, shelving, barrier } from './symbols/furniture.ts';
 import { deskSingle, deskMeeting, deskReception } from './symbols/desks.ts';
+import { deskLaptopV2, deskWorkstationV2 } from './symbols/desks-v2.ts';
 import { treeRound, treeConifer, planter, streetLamp, signpost } from './symbols/street.ts';
 import { shopFront, cornerShop, cafeSeating, marketStall } from './symbols/highstreet.ts';
+import { spriteDemo } from './sprites/demo-crate.ts';
 import { SKIN_TONES, HAIR_COLORS } from './style.ts';
 
 // EntityType mirrors SCHEMA.md (duplicated: assets must not import outside assets/).
@@ -184,8 +186,14 @@ const ASSETS: AssetDef[] = [
   { id: 'desk-single', category: 'prop', footprint: { w: 2, d: 1 }, orientations: 2, render: deskSingle },
   { id: 'desk-meeting', category: 'prop', footprint: { w: 2, d: 1 }, orientations: 2, render: deskMeeting },
   { id: 'desk-reception', category: 'prop', footprint: { w: 2, d: 2 }, orientations: 4, render: deskReception },
+  // World-space (iso3) pilot rebuilds — double-pedestal desk with dress-ups.
+  { id: 'desk-laptop-v2', category: 'prop', footprint: { w: 2, d: 1 }, orientations: 2, render: deskLaptopV2 },
+  { id: 'desk-workstation-v2', category: 'prop', footprint: { w: 2, d: 1 }, orientations: 2, render: deskWorkstationV2 },
   { id: 'shelving', category: 'prop', footprint: { w: 1, d: 1 }, orientations: 2, render: shelving },
   { id: 'barrier', category: 'prop', footprint: { w: 1, d: 1 }, render: barrier },
+  // PNG sprite demo (raster billboard object). Drop-in template for user art —
+  // see src/assets/sprites/demo-crate.ts + docs/REPLICATING_REFERENCES.md.
+  { id: 'sprite-demo', category: 'prop', ...spriteDemo },
 
   // Street / greenery (props) — radially symmetric, orientations 1
   { id: 'tree-round', category: 'prop', footprint: { w: 1, d: 1 }, render: treeRound },

@@ -49,7 +49,13 @@ interface AssetDef {
 ```
 
 - Fragments contain only `<g>`, `<path>`, `<line>`, `<polygon>`, `<polyline>`,
-  `<rect>`, `<circle>`, `<text>` — the dialect svg2pdf supports.
+  `<rect>`, `<circle>`, `<text>` — the dialect svg2pdf supports — plus `<image>`
+  for **PNG sprite** assets only (a base64 data-URI billboard; see
+  `src/assets/sprite.ts` and docs/REPLICATING_REFERENCES.md → "Using PNG
+  sprites"). `<image>` is a raster escape hatch: it does not obey the line-art
+  tokens (INK/PAPER/stroke), does not restyle, and PDF export rasterises rather
+  than vectorises it (svg2pdf embeds the bitmap). Prefer authored line-art assets
+  wherever the shape can be drawn; reach for `<image>` only for genuine bitmap art.
 - No `id` attributes inside fragments (they get stamped many times).
 - No `style` attributes — presentation attributes only (`stroke`, `fill`, …).
 - Text: `font-family="Helvetica, Arial, sans-serif"`; annotations use ACCENT.

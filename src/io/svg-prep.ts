@@ -183,7 +183,9 @@ function addPointsForElement(
       if (x2 !== null && y2 !== null) add(x2 + dx, y2 + dy);
       break;
     }
-    case 'rect': {
+    case 'rect':
+    case 'image': {
+      // <image> shares rect's x/y/width/height box geometry (PNG sprites).
       const x = num(attrs, 'x') ?? 0;
       const y = num(attrs, 'y') ?? 0;
       const w = num(attrs, 'width') ?? 0;
@@ -296,7 +298,7 @@ export function assembleSvg(
   const r = (v: number): number => Math.round(v * 100) / 100;
 
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" ` +
+    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" ` +
     `viewBox="${r(vbX)} ${r(vbY)} ${r(vbW)} ${r(vbH)}" ` +
     `width="${r(vbW)}" height="${r(vbH)}">` +
     `<rect x="${r(vbX)}" y="${r(vbY)}" width="${r(vbW)}" height="${r(vbH)}" fill="#FFFFFF"/>` +
@@ -369,7 +371,7 @@ export function assembleSvgWithMeta(
   const r = (v: number): number => Math.round(v * 100) / 100;
 
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" ` +
+    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" ` +
     `viewBox="${r(vbX)} ${r(vbY)} ${r(vbW)} ${r(vbH)}" ` +
     `width="${r(vbW)}" height="${r(vbH)}">` +
     metadataBlock(opts.title ?? '', opts.desc ?? '') +
