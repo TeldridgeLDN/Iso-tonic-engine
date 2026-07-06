@@ -82,3 +82,86 @@ until the asset sits over the reference, then judge proportions by eye.
 - **The tool cannot judge fidelity for you** — it only assembles the overlay.
   Visual calibration is a human step. A 2:1 asset over 30°-iso reference art
   will never align perfectly; aim for matching *proportions*, not pixels.
+
+## Using PNG sprites
+
+Everything above re-proportions a reference into **authored line-art**. Sometimes
+you just want to drop a **raster PNG** in as a foreground object — a logo, a
+photo cut-out, a piece of pre-drawn art. `spriteAsset()` (`src/assets/sprite.ts`)
+wraps a PNG in an SVG `<image>` billboard that behaves like any other asset:
+it has a footprint, sorts by depth between assets, and exports through SVG / PNG
+/ PDF.
+
+A sprite is a flat, **camera-facing billboard**, not geometry projected onto the
+ground plane — a PNG can't be foreshortened onto the 2:1 iso ground without
+smearing, so it stands upright with its baseline anchored on the footprint.
+
+### Drop in your own PNG (≈5 lines)
+
+1. **Add the file.** Put `my-thing.png` in `src/assets/sprites/`. Export it with
+   a **transparent background** (RGBA) so it sits over the scene cleanly.
+2. **Write the registration file** `src/assets/sprites/my-thing.ts`:
+
+   ```ts
+   // vite resolves ?inline → a base64 data URI string (works in the app build
+   // AND in vite-node, e.g. the contact sheet). Typed via vite/client.
+   import img from './my-thing.png?inline';
+   import { spriteAsset } from '../sprite.ts';
+
+   export const myThing = spriteAsset({
+     footprint: { w: 1, d: 1 }, // tiles — drives ground diamond + depth sort
+     widthPx: 64,               // display width; HEIGHT follows the PNG aspect
+     image: img,                // one image → reused at every orientation
+     // anchor: { dx: 0, dy: 0 }, // optional nudge of the baseline (px)
+   });
+   ```
+
+3. **Register it** in `src/assets/library.ts`: import it and add one entry —
+   `{ id: 'my-thing', category: 'prop', ...myThing }` (spread carries the
+   `footprint` / `orientations` / `render` from `spriteAsset`).
+4. **Verify.** `npm run contact-sheet` — the tile shows your PNG. `npx tsc
+   --noEmit` and `npm test` stay green.
+
+### Choosing footprint / anchor / width
+
+- **footprint** `{ w, d }` in tiles: the ground the object occupies, and what
+  the depth sorter uses to decide what draws in front. Match it to the object's
+  ground size (a person ≈ 1×1, a market stall ≈ 1×1, a lorry ≈ 2×1).
+- **widthPx**: on-screen width in pixels. A 1×1 tile top spans 64px, so
+  `widthPx: 64` fills roughly one tile. Height is derived from the PNG's
+  intrinsic aspect ratio (read from its header) — the image is never stretched.
+- **anchor** `{ dx, dy }`: nudges the **baseline** (bottom-centre of the
+  billboard) away from the footprint diamond centre. Default `{0,0}` stands the
+  bottom-centre on the diamond centre. `dy` negative lifts the sprite; positive
+  sinks it. Use it to sit a sprite whose art has empty margin, or to plant a
+  "feet" point that isn't at the image's bottom-centre.
+
+### Per-orientation variants
+
+Pass an **array** of up to four data URIs instead of one to draw a different
+image per facing (orientation 0–3):
+
+```ts
+import n0 from './lorry-n.png?inline';
+import e1 from './lorry-e.png?inline';
+image: [n0, e1],          // indices 2,3 fall back to index 0
+```
+
+With more than one image the asset reports `orientations: 4`; with a single
+image it reports `orientations: 1` (one billboard reused at every facing).
+
+### Honest trade-offs
+
+- **No token restyle.** A sprite is a bitmap — it ignores the `INK` / `PAPER` /
+  stroke tokens and the line-art contract. It will not match hand-authored
+  assets' look, and Present-mode dimming / spotlight recolouring don't apply.
+- **Scaling artifacts.** Enlarging `widthPx` past the PNG's native pixel width
+  upscales the bitmap (soft / blocky). Author the PNG at (or above) the largest
+  size you'll display.
+- **One image per orientation.** There's no free rotation — you either reuse one
+  billboard for all facings or supply up to four pre-drawn variants.
+- **PDF export rasterises it.** SVG and PNG export embed the bitmap cleanly (the
+  data URI is same-origin, so PNG export's canvas is not tainted). PDF export via
+  svg2pdf **embeds the PNG as a raster image** inside the PDF (it does not
+  vectorise it) — fine for viewing, but the sprite won't scale losslessly like
+  the vector line-art around it.
