@@ -54,18 +54,25 @@ const pedH = topZ - topTh;
 // ---------------------------------------------------------------------------
 // One 3-drawer pedestal at ground (x,y), width pedW × depth pedD, height pedH.
 // Draws the box then three drawer-front seams + handle marks on its visible
-// SE (right/front) face. Handles are short ink dashes centred on each drawer.
+// FRONT (SW/left, south-facing) face — the same face as the desk knee-hole, so
+// the drawers face the seated user like a real double-pedestal desk. Handles
+// are short ink dashes centred on each drawer.
+//
+// Face geometry (see iso3.box corners N=(x,y) E=(x+w,y) S=(x+w,y+d) W=(x,y+d)):
+//   The SW/left face is the plane at constant y = y+pedD spanning W→S. A line of
+//   fixed height on it varies x, giving screen slope +0.5 (the long front-face
+//   plane). The SE/right face (constant x) would give slope −0.5 — that is the
+//   short END face and was the previous, wrong, placement (drawers read 90°
+//   anticlockwise). We param along the FRONT face:
+//     u ∈ [0,1] from W (x) to S (x+pedW) at fixed y = y+pedD; v = height fraction.
 // ---------------------------------------------------------------------------
 function pedestal(x: number, y: number): string {
   const frags: string[] = [];
   frags.push(box(x, y, 0, pedW, pedD, pedH, { strokeWidth: STROKE }));
 
-  // Three drawer seams + handles on the RIGHT (SE) face — the face spanning
-  // ground S=(x+pedW,y+pedD)→E=(x+pedW,y) up to pedH. We param along that face:
-  //   u ∈ [0,1] from S (front) to E (rear) at fixed x=x+pedW; v = height fraction.
-  const faceX = x + pedW;
+  const faceY = y + pedD;
   const onFace = (u: number, vFrac: number): Pt =>
-    projectWorld(faceX, y + pedD * (1 - u), vFrac * pedH);
+    projectWorld(x + pedW * u, faceY, vFrac * pedH);
   for (let i = 0; i < 3; i++) {
     const vTop = (i + 1) / 3;
     // horizontal seam across the face at this drawer's top
