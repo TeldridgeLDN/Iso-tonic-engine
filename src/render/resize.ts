@@ -29,17 +29,48 @@ export const DEFAULT_MIN = 1;
 export const DEFAULT_MAX = 24;
 
 /**
- * A grid, ground zone asset whose paramSchema carries numeric `w` and `d`
- * fields is resizable tile-by-tile. Anything else (free placement, non-ground,
- * or an asset without both numeric w/d params) is not.
+ * The two schema shapes that carry a tile size: zone assets (`w`/`d`) and
+ * parametric buildings (`widthTiles`/`depthTiles`). This is the single source of
+ * truth for "which param keys mirror the footprint" — placement seeding, the
+ * ResizeEntity dispatch sites, and the migration all resolve size keys through
+ * `sizeParamKeys`.
+ */
+const SIZE_KEY_PAIRS: { w: string; d: string }[] = [
+  { w: 'w', d: 'd' },
+  { w: 'widthTiles', d: 'depthTiles' },
+];
+
+/**
+ * Resolve the size-param key pair an asset's schema uses to mirror its
+ * footprint, or undefined if it has neither pair. Zones → {w,d}; parametric
+ * buildings → {widthTiles,depthTiles}.
+ */
+export function sizeParamKeys(
+  assetDef: ResizeAssetDef | undefined
+): { w: string; d: string } | undefined {
+  if (!assetDef) return undefined;
+  for (const pair of SIZE_KEY_PAIRS) {
+    if (hasNumericField(assetDef, pair.w) && hasNumericField(assetDef, pair.d)) {
+      return pair;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * A grid asset whose paramSchema carries a size-param pair is resizable
+ * tile-by-tile: zones (`w`/`d`, always ground) and parametric buildings
+ * (`widthTiles`/`depthTiles`, NOT ground). Anything else (free placement, or an
+ * asset without a recognised size pair) is not. Ground is no longer required —
+ * grid placement plus a size-param pair is the criterion, so buildings get the
+ * handle, the resize tool, and panel routing automatically.
  */
 export function isResizable(
   entity: Entity,
   assetDef: ResizeAssetDef | undefined
 ): boolean {
   if (entity.placement.mode !== 'grid') return false;
-  if (!assetDef || assetDef.ground !== true) return false;
-  return hasNumericField(assetDef, 'w') && hasNumericField(assetDef, 'd');
+  return sizeParamKeys(assetDef) !== undefined;
 }
 
 function hasNumericField(def: ResizeAssetDef, key: string): boolean {
@@ -48,14 +79,19 @@ function hasNumericField(def: ResizeAssetDef, key: string): boolean {
   );
 }
 
-/** Clamp bounds for the w/d params, falling back to DEFAULT_MIN/MAX. */
+/**
+ * Clamp bounds for the size params, keyed off whichever pair the schema uses
+ * (zone `w`/`d` or building `widthTiles`/`depthTiles`), falling back to
+ * DEFAULT_MIN/MAX. Returned as authored-axis `{w,d}` regardless of key names.
+ */
 export function resizeBounds(assetDef: ResizeAssetDef | undefined): {
   w: SizeBounds;
   d: SizeBounds;
 } {
+  const keys = sizeParamKeys(assetDef) ?? { w: 'w', d: 'd' };
   return {
-    w: fieldBounds(assetDef, 'w'),
-    d: fieldBounds(assetDef, 'd'),
+    w: fieldBounds(assetDef, keys.w),
+    d: fieldBounds(assetDef, keys.d),
   };
 }
 

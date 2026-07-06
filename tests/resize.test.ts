@@ -5,6 +5,7 @@ import {
   resolveResizeDrag,
   resolveResizeTarget,
   resizeHandleScreen,
+  sizeParamKeys,
   DEFAULT_MIN,
   DEFAULT_MAX,
   type ResizeAssetDef,
@@ -24,6 +25,26 @@ const zoneDef: ResizeAssetDef = {
     { key: 'label', kind: 'text' },
   ],
 };
+
+const buildingDef: ResizeAssetDef = {
+  ground: false, // buildings are NOT ground, but still resizable
+  paramSchema: [
+    { key: 'widthTiles', kind: 'number', min: 1, max: 8 },
+    { key: 'depthTiles', kind: 'number', min: 1, max: 8 },
+    { key: 'storeys', kind: 'number', min: 1, max: 10 },
+  ],
+};
+
+function buildingEntity(over: Partial<Entity> = {}): Entity {
+  return {
+    id: 'blk',
+    type: 'physical-infra',
+    label: 'Office',
+    placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 2, d: 2 } },
+    asset: { symbol: 'office-block', params: { widthTiles: 2, depthTiles: 2 } },
+    ...over,
+  };
+}
 
 function zoneEntity(over: Partial<Entity> = {}): Entity {
   return {
@@ -48,8 +69,10 @@ describe('isResizable', () => {
     expect(isResizable(zoneEntity(), zoneDef)).toBe(true);
   });
 
-  it('false when the asset is not ground', () => {
-    expect(isResizable(zoneEntity(), { ...zoneDef, ground: false })).toBe(false);
+  it('true even when the asset is not ground, as long as it has size params', () => {
+    // Ground is no longer required (buildings are resizable): grid placement +
+    // a size-param pair is the criterion. A non-ground w/d asset stays resizable.
+    expect(isResizable(zoneEntity(), { ...zoneDef, ground: false })).toBe(true);
   });
 
   it('false when the placement is free (not grid)', () => {
@@ -64,6 +87,46 @@ describe('isResizable', () => {
 
   it('false for an undefined asset def', () => {
     expect(isResizable(zoneEntity(), undefined)).toBe(false);
+  });
+});
+
+// --- sizeParamKeys + building resizability ----------------------------------
+
+describe('sizeParamKeys', () => {
+  it('maps a zone schema to the w/d pair', () => {
+    expect(sizeParamKeys(zoneDef)).toEqual({ w: 'w', d: 'd' });
+  });
+
+  it('maps a building schema to the widthTiles/depthTiles pair', () => {
+    expect(sizeParamKeys(buildingDef)).toEqual({ w: 'widthTiles', d: 'depthTiles' });
+  });
+
+  it('returns undefined for a schema with no size pair (e.g. a road tile)', () => {
+    expect(sizeParamKeys({ ground: true, paramSchema: [] })).toBeUndefined();
+  });
+
+  it('returns undefined for an undefined def', () => {
+    expect(sizeParamKeys(undefined)).toBeUndefined();
+  });
+});
+
+describe('isResizable (buildings)', () => {
+  it('true for a grid building via widthTiles/depthTiles even though not ground', () => {
+    expect(isResizable(buildingEntity(), buildingDef)).toBe(true);
+  });
+
+  it('false for a free-placed building', () => {
+    const free = buildingEntity({ placement: { mode: 'free', x: 1, y: 2 } });
+    expect(isResizable(free, buildingDef)).toBe(false);
+  });
+});
+
+describe('resizeBounds (buildings)', () => {
+  it('reads min/max from the widthTiles/depthTiles fields (returned as w/d)', () => {
+    expect(resizeBounds(buildingDef)).toEqual({
+      w: { min: 1, max: 8 },
+      d: { min: 1, max: 8 },
+    });
   });
 });
 
@@ -164,12 +227,18 @@ describe('resizeHandleScreen', () => {
 // --- ResizeEntity command (apply / invert round-trip) -----------------------
 
 describe('ResizeEntity', () => {
+  // Callers now ALWAYS pass the resolved paramKeys (from sizeParamKeys), so the
+  // command always syncs those params. The old conditional "sync only if the key
+  // is already present" behaviour is replaced by "sync iff paramKeys given".
+  const WD = { w: 'w', d: 'd' } as const;
+
   it('updates BOTH placement.footprint and params.w/d atomically', () => {
     const doc = docWith(zoneEntity());
     const cmd = new ResizeEntity({
       entityId: 'z',
       from: { w: 4, d: 3 },
       to: { w: 7, d: 6 },
+      paramKeys: WD,
     });
     const next = cmd.apply(doc);
     const e = next.entities[0];
@@ -183,13 +252,36 @@ describe('ResizeEntity', () => {
       entityId: 'z',
       from: { w: 4, d: 3 },
       to: { w: 7, d: 6 },
+      paramKeys: WD,
     });
     const applied = cmd.apply(doc);
     const restored = cmd.invert(applied);
     expect(restored.entities[0]).toEqual(doc.entities[0]);
   });
 
-  it('resizes a params-less asset by footprint only (no params key introduced)', () => {
+  it('CREATES params when absent (paramKeys given) and invert restores absence', () => {
+    // The bug's core: a placed/migrated entity whose params lack w/d must still
+    // sync on resize (old code left them absent → blank panel, drifting handle).
+    const bare = zoneEntity({
+      id: 'b',
+      asset: { symbol: 'department-zone' }, // no params at all
+    });
+    const doc = docWith(bare);
+    const cmd = new ResizeEntity({
+      entityId: 'b',
+      from: { w: 4, d: 3 },
+      to: { w: 2, d: 2 },
+      paramKeys: WD,
+    });
+    const next = cmd.apply(doc);
+    const e = next.entities[0];
+    expect((e.placement as GridPlacement).footprint).toEqual({ w: 2, d: 2 });
+    expect(e.asset.params).toEqual({ w: 2, d: 2 });
+    // invert restores the exact prior (params-less) state.
+    expect(cmd.invert(next).entities[0]).toEqual(doc.entities[0]);
+  });
+
+  it('resizes footprint only when paramKeys omitted (no params key introduced)', () => {
     const bare = zoneEntity({
       id: 'b',
       asset: { symbol: 'department-zone' }, // no params
@@ -199,6 +291,7 @@ describe('ResizeEntity', () => {
       entityId: 'b',
       from: { w: 4, d: 3 },
       to: { w: 2, d: 2 },
+      // no paramKeys → footprint-only
     });
     const next = cmd.apply(doc);
     const e = next.entities[0];
@@ -214,11 +307,38 @@ describe('ResizeEntity', () => {
       asset: { symbol: 'department-zone', params: { w: 4, d: 3, label: 'OPS', number: 5 } },
     });
     const doc = docWith(rotated);
-    const cmd = new ResizeEntity({ entityId: 'z', from: { w: 4, d: 3 }, to: { w: 5, d: 5 } });
+    const cmd = new ResizeEntity({
+      entityId: 'z',
+      from: { w: 4, d: 3 },
+      to: { w: 5, d: 5 },
+      paramKeys: WD,
+    });
     const next = cmd.apply(doc);
     const e = next.entities[0];
     expect((e.placement as GridPlacement).rotation).toBe(1);
     expect(e.asset.params).toEqual({ w: 5, d: 5, label: 'OPS', number: 5 });
+  });
+
+  it('syncs building widthTiles/depthTiles when those paramKeys are given', () => {
+    const bldg: Entity = {
+      id: 'blk',
+      type: 'physical-infra',
+      label: 'Office',
+      placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 2, d: 2 } },
+      asset: { symbol: 'office-block', params: { widthTiles: 2, depthTiles: 2, storeys: 5 } },
+    };
+    const doc = docWith(bldg);
+    const cmd = new ResizeEntity({
+      entityId: 'blk',
+      from: { w: 2, d: 2 },
+      to: { w: 5, d: 3 },
+      paramKeys: { w: 'widthTiles', d: 'depthTiles' },
+    });
+    const next = cmd.apply(doc);
+    const e = next.entities[0];
+    expect((e.placement as GridPlacement).footprint).toEqual({ w: 5, d: 3 });
+    expect(e.asset.params).toEqual({ widthTiles: 5, depthTiles: 3, storeys: 5 });
+    expect(cmd.invert(next).entities[0]).toEqual(doc.entities[0]);
   });
 
   it('throws when applied to a non-grid (free) placement', () => {

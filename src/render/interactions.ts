@@ -24,6 +24,7 @@ import {
   resizeBounds,
   resolveResizeDrag,
   resolveResizeTarget,
+  sizeParamKeys,
 } from './resize.ts';
 
 // ---------------------------------------------------------------------------
@@ -491,8 +492,9 @@ export class InteractionController {
     const from = entity.placement.footprint;
     const to = candidate.footprint;
     if (to.w === from.w && to.d === from.d) return; // no-op
+    const paramKeys = sizeParamKeys(getAsset(entity.asset.symbol));
     this.host.history.execute(
-      new ResizeEntity({ entityId: entity.id, from, to })
+      new ResizeEntity({ entityId: entity.id, from, to, paramKeys })
     );
   }
 

@@ -11,6 +11,7 @@ import { planRotation } from './render/rotation.ts';
 import { presentSpotlight } from './render/spotlight.ts';
 import { renderScene, type ViewState } from './render/renderer.ts';
 import { isResizable } from './render/resize.ts';
+import { backfillSizeParams } from './render/docMigrate.ts';
 import { getAsset } from './assets/library.ts';
 import { defaultCamera, screenToWorld, viewBoxAttr, viewBoxFor } from './render/camera.ts';
 import {
@@ -67,8 +68,11 @@ export class App implements AppContext {
 
   constructor(root: HTMLElement, doc: SceneDocument) {
     this.root = root;
-    this.history = new History(doc);
-    this.camera = doc.camera ? { ...doc.camera } : defaultCamera();
+    // Registry-aware backfill heals pre-seeding docs (saved maps, demo/example):
+    // grid zones/buildings missing their size params get them from the footprint.
+    const healed = backfillSizeParams(doc);
+    this.history = new History(healed);
+    this.camera = healed.camera ? { ...healed.camera } : defaultCamera();
     this.placement = this.makePlacementController();
   }
 
@@ -167,8 +171,10 @@ export class App implements AppContext {
   }
 
   replaceDocument(doc: SceneDocument): void {
-    this.history = new History(doc);
-    this.camera = doc.camera ? { ...doc.camera } : defaultCamera();
+    // Heal on adoption too, so file-open / wizard / demo all get seeded params.
+    const healed = backfillSizeParams(doc);
+    this.history = new History(healed);
+    this.camera = healed.camera ? { ...healed.camera } : defaultCamera();
     this.selection = undefined;
     this.spotlight = undefined;
     this.ghost = undefined;

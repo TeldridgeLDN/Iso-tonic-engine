@@ -149,17 +149,24 @@ export class MoveEntity implements Command {
 /**
  * Resize a grid entity's footprint tile-by-tile. `from`/`to` are AUTHORED
  * (rotation-0) {w,d} extents — the interaction layer converts effective↔authored
- * so this command stays dumb. Updates BOTH placement.footprint AND, when the
- * asset carries numeric w/d params (zone assets), asset.params.w/d, keeping the
- * two in sync. Assets without w/d params only change their footprint.
+ * so this command stays dumb. Updates BOTH placement.footprint AND, when
+ * `paramKeys` names the size-param pair the asset uses (zones → {w:'w',d:'d'};
+ * buildings → {w:'widthTiles',d:'depthTiles'}), asset.params[those keys],
+ * keeping the two in sync. Callers resolve the keys via resize.ts `sizeParamKeys`
+ * so this command stays free of the asset/render layers.
  *
- * Invert restores the prior footprint and params exactly (including whether a
- * w/d param key was present at all, so a params-less asset stays params-less).
+ * When `paramKeys` is given the params are ALWAYS written (created if absent),
+ * so a freshly-placed or migrated entity whose params lack them still syncs.
+ * When omitted, only the footprint changes.
+ *
+ * Invert restores the prior footprint and params exactly (including whether each
+ * key was present at all, so a params-less asset stays params-less).
  */
 export class ResizeEntity implements Command {
   label = 'Resize entity';
   private readonly id: string;
   private readonly to: { w: number; d: number };
+  private readonly paramKeys?: { w: string; d: string };
   // Captured prior state at apply-time for an exact invert (robust against a
   // stale `from`, mirroring MoveEntity's capture pattern).
   private prevFootprint?: { w: number; d: number };
@@ -172,11 +179,17 @@ export class ResizeEntity implements Command {
     entityId: string;
     from: { w: number; d: number };
     to: { w: number; d: number };
+    /**
+     * The size-param key pair to sync (resolved by the caller via
+     * resize.ts `sizeParamKeys`). Omit for footprint-only assets.
+     */
+    paramKeys?: { w: string; d: string };
   }) {
     this.id = args.entityId;
     // `from` is part of the command's declared shape (authored prior extents);
     // invert restores the actual captured prior footprint, so it isn't stored.
     this.to = args.to;
+    this.paramKeys = args.paramKeys;
   }
 
   apply(doc: SceneDocument): SceneDocument {
@@ -185,26 +198,28 @@ export class ResizeEntity implements Command {
       throw new Error(`ResizeEntity: "${this.id}" is not a grid placement`);
     }
     this.prevFootprint = e.placement.footprint;
+    const keys = this.paramKeys;
     const params = e.asset.params ?? {};
-    this.prevWPresent = 'w' in params;
-    this.prevDPresent = 'd' in params;
-    this.prevW = params.w;
-    this.prevD = params.d;
+    if (keys) {
+      this.prevWPresent = keys.w in params;
+      this.prevDPresent = keys.d in params;
+      this.prevW = params[keys.w];
+      this.prevD = params[keys.d];
+    }
 
     const to = this.to;
-    const syncParams = this.prevWPresent || this.prevDPresent;
     return mapEntity(doc, this.id, (ent) => {
       const placement = ent.placement as GridPlacement;
       const next: Entity = {
         ...ent,
         placement: { ...placement, footprint: { w: to.w, d: to.d } },
       };
-      // Sync w/d params only if the asset already exposes them (zones do),
-      // mirroring how zone assets are always authored with w/d in params.
-      if (syncParams) {
+      // Always sync the named size params (creating them if absent), so a
+      // freshly-placed / migrated entity whose params lack them still syncs.
+      if (keys) {
         next.asset = {
           ...ent.asset,
-          params: { ...(ent.asset.params ?? {}), w: to.w, d: to.d },
+          params: { ...(ent.asset.params ?? {}), [keys.w]: to.w, [keys.d]: to.d },
         };
       }
       return next;
@@ -214,20 +229,29 @@ export class ResizeEntity implements Command {
   invert(doc: SceneDocument): SceneDocument {
     if (!this.prevFootprint) throw new Error('ResizeEntity: invert before apply');
     const prevFootprint = this.prevFootprint;
-    const syncParams = this.prevWPresent || this.prevDPresent;
+    const keys = this.paramKeys;
     return mapEntity(doc, this.id, (ent) => {
       const placement = ent.placement as GridPlacement;
       const next: Entity = {
         ...ent,
         placement: { ...placement, footprint: prevFootprint },
       };
-      if (syncParams) {
+      if (keys) {
         const params: Record<string, unknown> = { ...(ent.asset.params ?? {}) };
-        if (this.prevWPresent) params.w = this.prevW;
-        else delete params.w;
-        if (this.prevDPresent) params.d = this.prevD;
-        else delete params.d;
-        next.asset = { ...ent.asset, params };
+        if (this.prevWPresent) params[keys.w] = this.prevW;
+        else delete params[keys.w];
+        if (this.prevDPresent) params[keys.d] = this.prevD;
+        else delete params[keys.d];
+        // Restore the params-absent case exactly: if stripping the size keys
+        // empties params, the entity had no params originally (any other key
+        // would survive) — drop the key rather than leave an empty {}.
+        if (Object.keys(params).length === 0) {
+          const asset = { ...ent.asset };
+          delete asset.params;
+          next.asset = asset;
+        } else {
+          next.asset = { ...ent.asset, params };
+        }
       }
       return next;
     });
