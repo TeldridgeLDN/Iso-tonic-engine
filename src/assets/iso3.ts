@@ -146,7 +146,7 @@ export function box(
   const zBot = z;
   const zTop = z + h;
 
-  const gN = projectWorld(x, y, zBot);
+  // (north-bottom corner gN is never a visible-face vertex, so it is omitted)
   const gE = projectWorld(x + w, y, zBot);
   const gS = projectWorld(x + w, y + d, zBot);
   const gW = projectWorld(x, y + d, zBot);
