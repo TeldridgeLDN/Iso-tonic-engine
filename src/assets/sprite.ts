@@ -16,6 +16,11 @@
 // past native px, one image per orientation) are documented in
 // docs/REPLICATING_REFERENCES.md.
 //
+// ZERO-STEP REGISTRATION: you normally never call spriteAsset() by hand. Drop a
+// PNG in src/assets/sprites/ and spriteAuto.ts auto-discovers it (id = kebab
+// filename, optional sidecar JSON + `.oN.png` variants). This function is the
+// underlying machinery both the auto path and any rare hand-registration use.
+//
 // DATA URI MECHANISM
 // ------------------
 // The PNG is imported with vite's `?inline` suffix, which resolves to a

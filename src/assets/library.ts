@@ -21,7 +21,7 @@ import { deskSingle, deskMeeting, deskReception } from './symbols/desks.ts';
 import { deskLaptopV2, deskWorkstationV2 } from './symbols/desks-v2.ts';
 import { treeRound, treeConifer, planter, streetLamp, signpost } from './symbols/street.ts';
 import { shopFront, cornerShop, cafeSeating, marketStall } from './symbols/highstreet.ts';
-import { spriteDemo } from './sprites/demo-crate.ts';
+import { discoverSprites } from './spriteAuto.ts';
 import { SKIN_TONES, HAIR_COLORS } from './style.ts';
 
 // EntityType mirrors SCHEMA.md (duplicated: assets must not import outside assets/).
@@ -114,7 +114,10 @@ function buildingPreset(preset: Record<string, unknown>): AssetDef['render'] {
 
 // --- registry ------------------------------------------------------------
 
-const ASSETS: AssetDef[] = [
+// Hand-registered assets. Auto-discovered PNG sprites (src/assets/sprites/*.png,
+// see spriteAuto.ts) are merged in below; on an id collision the hand-registered
+// entry wins so a deliberate registration always overrides a dropped-in file.
+const HAND_ASSETS: AssetDef[] = [
   // Figurine (free-placed)
   { id: 'figurine', category: 'user', orientations: 2, render: renderFigurine, paramSchema: figurineSchema },
 
@@ -191,9 +194,6 @@ const ASSETS: AssetDef[] = [
   { id: 'desk-workstation-v2', category: 'prop', footprint: { w: 2, d: 1 }, orientations: 2, render: deskWorkstationV2 },
   { id: 'shelving', category: 'prop', footprint: { w: 1, d: 1 }, orientations: 2, render: shelving },
   { id: 'barrier', category: 'prop', footprint: { w: 1, d: 1 }, render: barrier },
-  // PNG sprite demo (raster billboard object). Drop-in template for user art —
-  // see src/assets/sprites/demo-crate.ts + docs/REPLICATING_REFERENCES.md.
-  { id: 'sprite-demo', category: 'prop', ...spriteDemo },
 
   // Street / greenery (props) — radially symmetric, orientations 1
   { id: 'tree-round', category: 'prop', footprint: { w: 1, d: 1 }, render: treeRound },
@@ -219,6 +219,41 @@ const ASSETS: AssetDef[] = [
   { id: 'callout', category: 'annotation', render: renderCallout, paramSchema: calloutSchema },
 ];
 
+// Merge auto-discovered sprites: hand-registered ids win; a colliding sprite is
+// dropped (warned once). The auto entries carry a string category from a
+// sidecar; narrow to AssetDef['category'] (fallback 'prop' if unrecognised) so
+// the palette groups them.
+const CATEGORIES: ReadonlySet<AssetDef['category']> = new Set<AssetDef['category']>([
+  'user',
+  'team',
+  'process',
+  'department',
+  'organisation',
+  'physical-infra',
+  'digital-infra',
+  'annotation',
+  'prop',
+]);
+
+function mergeAutoSprites(hand: AssetDef[]): AssetDef[] {
+  const handIds = new Set(hand.map((a) => a.id));
+  const merged = hand.slice();
+  for (const s of discoverSprites()) {
+    if (handIds.has(s.id)) {
+      // eslint-disable-next-line no-console
+      console.warn(`[assets] auto-sprite "${s.id}" ignored — a hand-registered asset owns that id.`);
+      continue;
+    }
+    const category = (CATEGORIES.has(s.category as AssetDef['category'])
+      ? (s.category as AssetDef['category'])
+      : 'prop');
+    merged.push({ id: s.id, category, footprint: s.footprint, orientations: s.orientations, render: s.render });
+  }
+  return merged;
+}
+
+const ASSETS: AssetDef[] = mergeAutoSprites(HAND_ASSETS);
+
 const BY_ID = new Map<string, AssetDef>(ASSETS.map((a) => [a.id, a]));
 
 // Back-compat id aliases: old registry ids that were renamed. Resolving keeps
@@ -226,6 +261,9 @@ const BY_ID = new Map<string, AssetDef>(ASSETS.map((a) => [a.id, a]));
 // listAssets / the palette). 'phone-kiosk' → 'telephone' (renamed 2026-07).
 const ID_ALIASES: Record<string, string> = {
   'phone-kiosk': 'telephone',
+  // The demo crate moved from a manual registration (id 'sprite-demo') to the
+  // auto-discovery path, where its id derives from the filename 'demo-crate.png'.
+  'sprite-demo': 'demo-crate',
 };
 
 export function getAsset(id: string): AssetDef | undefined {

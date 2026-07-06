@@ -96,31 +96,53 @@ A sprite is a flat, **camera-facing billboard**, not geometry projected onto the
 ground plane — a PNG can't be foreshortened onto the 2:1 iso ground without
 smearing, so it stands upright with its baseline anchored on the footprint.
 
-### Drop in your own PNG (≈5 lines)
+### Drop in your own PNG (ONE step)
 
-1. **Add the file.** Put `my-thing.png` in `src/assets/sprites/`. Export it with
-   a **transparent background** (RGBA) so it sits over the scene cleanly.
-2. **Write the registration file** `src/assets/sprites/my-thing.ts`:
+**Just drop the file.** Put `my-thing.png` in `src/assets/sprites/` (export it
+with a **transparent background** / RGBA so it sits over the scene cleanly).
+That is the whole workflow — no registration `.ts`, no `library.ts` edit.
 
-   ```ts
-   // vite resolves ?inline → a base64 data URI string (works in the app build
-   // AND in vite-node, e.g. the contact sheet). Typed via vite/client.
-   import img from './my-thing.png?inline';
-   import { spriteAsset } from '../sprite.ts';
+On the next build / dev reload it appears in the **library, the app palette
+("Props & scenery"), and the contact sheet** automatically. Discovery
+(`src/assets/spriteAuto.ts`) enumerates every `sprites/*.png` via vite's
+`import.meta.glob(..., { query: '?inline', eager: true })` — the same `?inline`
+data-URI mechanism `spriteAsset` uses, so it works identically in the app build
+AND in vite-node (contact sheet). The id is the kebab-cased filename
+(`My_Desk.png` → `my-desk`).
 
-   export const myThing = spriteAsset({
-     footprint: { w: 1, d: 1 }, // tiles — drives ground diamond + depth sort
-     widthPx: 64,               // display width; HEIGHT follows the PNG aspect
-     image: img,                // one image → reused at every orientation
-     // anchor: { dx: 0, dy: 0 }, // optional nudge of the baseline (px)
-   });
-   ```
+**Defaults** (no config): category `prop`, footprint `1×1`, `widthPx` 64,
+baseline anchored on the footprint-diamond centre.
 
-3. **Register it** in `src/assets/library.ts`: import it and add one entry —
-   `{ id: 'my-thing', category: 'prop', ...myThing }` (spread carries the
-   `footprint` / `orientations` / `render` from `spriteAsset`).
-4. **Verify.** `npm run contact-sheet` — the tile shows your PNG. `npx tsc
-   --noEmit` and `npm test` stay green.
+**Verify:** `npm run contact-sheet` shows a tile for your PNG. `npx tsc
+--noEmit` and `npm test` stay green.
+
+#### Overrides — optional sidecar JSON
+
+To change any default, drop a JSON file with the **same basename** next to the
+PNG (`my-thing.json` beside `my-thing.png`). All fields are optional:
+
+```json
+{ "footprint": { "w": 2, "d": 3 }, "widthPx": 48, "category": "prop", "anchor": { "dx": 0, "dy": -4 } }
+```
+
+A malformed field is ignored (it falls back to the default) rather than
+crashing the palette.
+
+#### Per-orientation variants — filename convention
+
+To draw a different image per facing, name files `my-thing.o0.png`,
+`my-thing.o1.png`, `my-thing.o2.png`, `my-thing.o3.png` (orientation 0–3). Any
+missing orientation reuses orientation 0; if only the base `my-thing.png`
+exists, all four facings reuse it. With more than one image the asset reports
+`orientations: 4`; with a single image, `orientations: 1`.
+
+#### Hand-registering (rare)
+
+If you need something `spriteAsset` can't express (a paramSchema, a custom
+renderer), you can still add an entry to `HAND_ASSETS` in `library.ts` by hand.
+**Hand-registered ids win**: a manual entry with the same id as a dropped-in
+PNG shadows the auto one (a `console.warn` flags the ignored sprite). For a
+plain bitmap billboard, prefer the one-step drop-in above.
 
 ### Choosing footprint / anchor / width
 
