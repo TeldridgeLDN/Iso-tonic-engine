@@ -155,14 +155,6 @@ const HAND_ASSETS: AssetDef[] = [
     render: buildingPreset({ widthTiles: 3, depthTiles: 2, storeys: 3, windowStyle: 'ribbon', roof: 'flat', signage: 'CIVIC' }),
     paramSchema: buildingSchema,
   },
-  {
-    id: 'house',
-    category: 'physical-infra',
-    footprint: { w: 1, d: 1 },
-    orientations: 4,
-    render: buildingPreset({ widthTiles: 1, depthTiles: 1, storeys: 1, windowStyle: 'sparse', roof: 'pitched' }),
-    paramSchema: buildingSchema,
-  },
 
   // High street / neighbourhood (dedicated renderers, mirror-based)
   { id: 'shop-front', category: 'physical-infra', footprint: { w: 2, d: 1 }, orientations: 2, render: shopFront, paramSchema: shopSchema },
@@ -264,6 +256,8 @@ const ID_ALIASES: Record<string, string> = {
   // The demo crate moved from a manual registration (id 'sprite-demo') to the
   // auto-discovery path, where its id derives from the filename 'demo-crate.png'.
   'sprite-demo': 'demo-crate',
+  // Vector house replaced by the auto-discovered PNG sprite (2026-07-06).
+  'house': 'house-small',
 };
 
 export function getAsset(id: string): AssetDef | undefined {
