@@ -14,7 +14,7 @@ import {
   renderIslandCoastline,
 } from './terrain.ts';
 import { renderCallout } from './callout.ts';
-import { serverRack, desktopWorkstation, laptopDesk, wallScreen, phoneKiosk, networkMast } from './symbols/digital.ts';
+import { serverRack, desktopWorkstation, laptopDesk, wallScreen, telephone, networkMast } from './symbols/digital.ts';
 import { van, car, tram } from './symbols/vehicles.ts';
 import { deskCluster, meetingTable, shelving, barrier } from './symbols/furniture.ts';
 import { treeRound, treeConifer, planter, streetLamp, signpost } from './symbols/street.ts';
@@ -169,7 +169,7 @@ const ASSETS: AssetDef[] = [
   { id: 'desktop-workstation', category: 'digital-infra', footprint: { w: 1, d: 1 }, orientations: 2, render: desktopWorkstation },
   { id: 'laptop-desk', category: 'digital-infra', footprint: { w: 1, d: 1 }, orientations: 2, render: laptopDesk },
   { id: 'wall-screen', category: 'digital-infra', footprint: { w: 2, d: 1 }, orientations: 2, render: wallScreen },
-  { id: 'phone-kiosk', category: 'digital-infra', footprint: { w: 1, d: 1 }, render: phoneKiosk },
+  { id: 'telephone', category: 'digital-infra', footprint: { w: 1, d: 1 }, orientations: 2, render: telephone },
   { id: 'network-mast', category: 'digital-infra', footprint: { w: 1, d: 1 }, render: networkMast },
 
   // Vehicles (physical infra)
@@ -209,8 +209,15 @@ const ASSETS: AssetDef[] = [
 
 const BY_ID = new Map<string, AssetDef>(ASSETS.map((a) => [a.id, a]));
 
+// Back-compat id aliases: old registry ids that were renamed. Resolving keeps
+// previously-saved documents loadable; the alias is NOT listed (no duplicate in
+// listAssets / the palette). 'phone-kiosk' → 'telephone' (renamed 2026-07).
+const ID_ALIASES: Record<string, string> = {
+  'phone-kiosk': 'telephone',
+};
+
 export function getAsset(id: string): AssetDef | undefined {
-  return BY_ID.get(id);
+  return BY_ID.get(id) ?? BY_ID.get(ID_ALIASES[id] ?? '');
 }
 
 export function listAssets(): AssetDef[] {
