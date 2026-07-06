@@ -807,3 +807,10 @@ body {
   justify-content: center;
   gap: 6px;
 }
+
+/* Armed adjust-size toggle */
+.iso-btn-armed {
+  background: #e8541d;
+  color: #fff;
+  border-color: #e8541d;
+}

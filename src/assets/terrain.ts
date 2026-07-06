@@ -298,6 +298,11 @@ export function renderRegionOrganic(params?: Record<string, unknown>): string {
   const pts = organicBlob(p.w, p.d, p.seed ?? 1);
   const d = closedSmoothPath(pts);
   const frags: string[] = [];
+  // invisible interior hit-area (clicks inside the region select it)
+  const ha = [project(0, 0), project(p.w, 0), project(p.w, p.d), project(0, p.d)];
+  frags.push(
+    `<polygon points="${ha.map((q) => `${n(q.x)},${n(q.y)}`).join(' ')}" fill="#FFFFFF" fill-opacity="0" stroke="none"/>`
+  );
   frags.push(`<path d="${d}" fill="none" stroke="${INK}" stroke-width="${n(STROKE)}" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="6 4"/>`);
   // plaque block near the north (top) vertex / origin corner
   frags.push(plaqueBlock(p.label, p.number, p.userGroups));

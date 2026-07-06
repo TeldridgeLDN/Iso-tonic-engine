@@ -148,6 +148,8 @@ export interface InteractionHost {
   onSelect(id: string | undefined): void;
   /** Current selection id (edit mode) — used to resolve the resize handle's owner. */
   getSelectedId?(): string | undefined;
+  /** When true, dragging a resizable zone resizes it without needing Shift. */
+  getResizeArmed?(): boolean;
   /** Called when the spotlight focus changes (present mode). */
   onSpotlight(id: string | undefined): void;
   /** Called on hover change so the app can re-render + position the tooltip. */
@@ -262,10 +264,14 @@ export class InteractionController {
       }
     }
 
-    // Shift+drag resizes instead of moving: the zone under the pointer if it's
-    // resizable, else the current selection. Selecting it first keeps the
-    // handle/ghost affordances consistent with a handle-initiated resize.
-    if (this.host.getMode() === 'edit' && evt.shiftKey) {
+    // Shift+drag (or the panel's armed "Adjust size" toggle) resizes instead
+    // of moving: the zone under the pointer if it's resizable, else the
+    // current selection. Selecting it first keeps the handle/ghost
+    // affordances consistent with a handle-initiated resize.
+    if (
+      this.host.getMode() === 'edit' &&
+      (evt.shiftKey || this.host.getResizeArmed?.() === true)
+    ) {
       const doc = this.host.history.document;
       const pressedId = this.entityIdAt(evt);
       const pressed = pressedId ? byId(doc, pressedId) : undefined;

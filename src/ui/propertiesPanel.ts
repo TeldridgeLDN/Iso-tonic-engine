@@ -83,6 +83,10 @@ export class PropertiesPanel {
     const rotate = this.rotateControl(entity);
     if (rotate) this.body.append(rotate);
 
+    // Resize toggle — only for resizable zones.
+    const resize = this.resizeControl(entity);
+    if (resize) this.body.append(resize);
+
     // Param editor / figurine editor
     if (isFigurine(entity)) {
       this.figurineEditor.setEntity(entity);
@@ -188,6 +192,26 @@ export class PropertiesPanel {
     );
     btn.title = 'Rotate 90° clockwise (or press R)';
     return field('Orientation', btn);
+  }
+
+  /**
+   * ⤡ Adjust-size toggle for resizable zones. While ON, dragging the zone on
+   * the map resizes it (Shift+drag and the corner handle always work too).
+   */
+  private resizeControl(entity: Entity): HTMLElement | null {
+    const def = getAsset(entity.asset.symbol);
+    if (!isResizable(entity, def)) return null;
+
+    const armed = this.ctx.resizeArmed();
+    const btn = button(
+      armed ? '⤡ Adjust size: ON — drag the zone' : '⤡ Adjust size: OFF',
+      () => this.ctx.setResizeArmed(!this.ctx.resizeArmed()),
+      `iso-btn iso-btn-sm iso-resize-btn${armed ? ' iso-btn-armed' : ''}`
+    );
+    btn.title =
+      'Toggle drag-to-resize. While on, dragging this zone changes its size. ' +
+      'Shift+drag or the corner handle work any time.';
+    return field('Size', btn);
   }
 
   private parentField(entity: Entity): HTMLElement {

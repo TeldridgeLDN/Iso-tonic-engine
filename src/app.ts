@@ -40,6 +40,7 @@ export class App implements AppContext {
   history: History;
   private mode: Mode = 'edit';
   private selection: string | undefined;
+  private resizeArmedFlag = false;
   private spotlight: string | undefined;
   private spotlightLayerId: string | undefined;
   private hoverId: string | undefined;
@@ -108,9 +109,19 @@ export class App implements AppContext {
   }
 
   select(id: string | undefined): void {
+    if (id !== this.selection) this.resizeArmedFlag = false;
     this.selection = id;
     this.notifySelection();
     this.render();
+  }
+
+  resizeArmed(): boolean {
+    return this.resizeArmedFlag;
+  }
+
+  setResizeArmed(on: boolean): void {
+    this.resizeArmedFlag = on;
+    this.notifySelection(); // panel toggle re-renders
   }
 
   onSelectionChange(listener: () => void): () => void {
@@ -313,6 +324,7 @@ export class App implements AppContext {
       history: this.history,
       getMode: () => this.mode,
       getSelectedId: () => this.selection,
+      getResizeArmed: () => this.resizeArmedFlag,
       getCamera: () => this.camera,
       panCamera: (next) => {
         this.camera = next;
@@ -325,6 +337,7 @@ export class App implements AppContext {
           this.placement.commit();
           return;
         }
+        if (id !== this.selection) this.resizeArmedFlag = false;
         this.selection = id;
         this.notifySelection();
         this.render();
@@ -390,6 +403,7 @@ export class App implements AppContext {
 
   private toggleMode(): void {
     this.mode = this.mode === 'edit' ? 'present' : 'edit';
+    this.resizeArmedFlag = false;
     this.selection = undefined;
     this.spotlight = undefined;
     this.spotlightLayerId = undefined;

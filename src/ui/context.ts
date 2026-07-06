@@ -41,6 +41,14 @@ export interface AppContext {
    */
   rotateSelected(): void;
 
+  /**
+   * Drag-to-resize arming for the selected zone (properties-panel toggle):
+   * while armed, dragging the zone on the map resizes it (no Shift needed).
+   * Cleared automatically when the selection changes or the mode flips.
+   */
+  resizeArmed(): boolean;
+  setResizeArmed(on: boolean): void;
+
   /** Current interaction mode ('edit' | 'present'). Panels adapt to it. */
   getMode(): 'edit' | 'present';
   /**

@@ -40,10 +40,24 @@ function parseGroups(v: unknown): string[] | undefined {
   return undefined;
 }
 
+/**
+ * Invisible interior hit-area so pointer clicks anywhere INSIDE the zone hit
+ * it (the dashed outline alone is a near-impossible 1.5px target). A painted
+ * fill with zero opacity is hit-testable under default pointer-events;
+ * entities inside the zone still win because they paint (and hit-test) later.
+ */
+export function zoneHitArea(w: number, d: number): string {
+  const a = project(0, 0);
+  const b = project(w, 0);
+  const c = project(w, d);
+  const e = project(0, d);
+  return `<polygon points="${a.x},${a.y} ${b.x},${b.y} ${c.x},${c.y} ${e.x},${e.y}" fill="#FFFFFF" fill-opacity="0" stroke="none"/>`;
+}
+
 /** Department / organisation plate: dashed ink outline diamond + plaque block. */
 export function renderZone(params?: Record<string, unknown>): string {
   const p = normalize(params);
-  const frags = [isoDiamondOutline(p.w, p.d, '6 4', INK, STROKE)];
+  const frags = [zoneHitArea(p.w, p.d), isoDiamondOutline(p.w, p.d, '6 4', INK, STROKE)];
   if (p.number !== undefined || p.userGroups) {
     // full plaque (badge + title + user-group glyphs) near the origin corner
     frags.push(plaqueBlock(p.label, p.number, p.userGroups));
@@ -58,7 +72,7 @@ export function renderZone(params?: Record<string, unknown>): string {
 /** Process zone: dotted outline diamond + corner label. */
 export function renderProcessZone(params?: Record<string, unknown>): string {
   const p = normalize(params);
-  const frags = [isoDiamondOutline(p.w, p.d, '1.5 3', INK, 1)];
+  const frags = [zoneHitArea(p.w, p.d), isoDiamondOutline(p.w, p.d, '1.5 3', INK, 1)];
   if (p.label) {
     const nn = project(0, 0);
     frags.push(text(nn.x + 4, nn.y - 4, p.label, { size: 7, fill: INK, anchor: 'start' }));
