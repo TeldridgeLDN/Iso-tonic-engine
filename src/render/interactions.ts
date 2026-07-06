@@ -245,7 +245,11 @@ export class InteractionController {
 
   private onPointerDown = (evt: PointerEvent): void => {
     if (evt.button !== 0) return;
-    this.svg.setPointerCapture(evt.pointerId);
+    try {
+      this.svg.setPointerCapture(evt.pointerId);
+    } catch {
+      // Synthetic events / already-released pointers have no capturable id.
+    }
 
     // Resize handle wins over entity-drag and pan. Only in edit mode, and only
     // when the pressed element is (inside) the handle for the selected entity.
@@ -254,6 +258,25 @@ export class InteractionController {
       const entity = id ? byId(this.host.history.document, id) : undefined;
       if (entity && entity.placement.mode === 'grid') {
         this.drag = { kind: 'resize', entityId: entity.id };
+        return;
+      }
+    }
+
+    // Shift+drag resizes instead of moving: the zone under the pointer if it's
+    // resizable, else the current selection. Selecting it first keeps the
+    // handle/ghost affordances consistent with a handle-initiated resize.
+    if (this.host.getMode() === 'edit' && evt.shiftKey) {
+      const doc = this.host.history.document;
+      const pressedId = this.entityIdAt(evt);
+      const pressed = pressedId ? byId(doc, pressedId) : undefined;
+      const selectedId = this.host.getSelectedId?.();
+      const selected = selectedId ? byId(doc, selectedId) : undefined;
+      const target = [pressed, selected].find(
+        (e) => e && isResizable(e, getAsset(e.asset.symbol))
+      );
+      if (target) {
+        this.host.onSelect(target.id);
+        this.drag = { kind: 'resize', entityId: target.id };
         return;
       }
     }
