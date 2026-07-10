@@ -15,7 +15,6 @@ import {
 } from './terrain.ts';
 import { renderCallout } from './callout.ts';
 import { serverRack, desktopWorkstation, laptopDesk, wallScreen, networkMast } from './symbols/digital.ts';
-import { tram } from './symbols/vehicles.ts';
 import { deskCluster, meetingTable, shelving, barrier } from './symbols/furniture.ts';
 import { deskMeeting, deskReception } from './symbols/desks.ts';
 import { deskLaptopV2, deskWorkstationV2 } from './symbols/desks-v2.ts';
@@ -177,7 +176,8 @@ const HAND_ASSETS: AssetDef[] = [
   // four-facing sprite in sprites/van.o0-3.png (same id, auto-discovered).
   // 'car' vector retired 2026-07-10 — replaced by the Variant-B flat-colour
   // four-facing sprite in sprites/car.o0-3.png (same id, auto-discovered).
-  { id: 'tram', category: 'physical-infra', footprint: { w: 3, d: 1 }, orientations: 2, render: tram },
+  // 'tram' vector retired 2026-07-10 — replaced by the Variant-B flat-colour
+  // four-facing sprite in sprites/tram.o0-3.png (same id, auto-discovered).
 
   // Furniture (props)
   { id: 'desk-cluster', category: 'prop', footprint: { w: 2, d: 2 }, orientations: 2, render: deskCluster },
