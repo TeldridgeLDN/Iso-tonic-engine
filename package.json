@@ -9,9 +9,11 @@
     "preview": "vite preview",
     "test": "vitest run",
     "contact-sheet": "vite-node scripts/contact-sheet.ts",
-    "ref-overlay": "vite-node scripts/ref-overlay.ts"
+    "ref-overlay": "vite-node scripts/ref-overlay.ts",
+    "prep-sprite": "vite-node scripts/prep-sprite.ts"
   },
   "devDependencies": {
+    "sharp": "^0.35.3",
     "typescript": "~6.0.2",
     "vite": "^8.1.1",
     "vite-node": "^6.0.0",
