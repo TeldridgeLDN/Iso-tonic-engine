@@ -20,7 +20,7 @@ import { deskCluster, meetingTable, shelving, barrier } from './symbols/furnitur
 import { deskMeeting, deskReception } from './symbols/desks.ts';
 import { deskLaptopV2, deskWorkstationV2 } from './symbols/desks-v2.ts';
 import { treeRound, treeConifer, planter, streetLamp, signpost } from './symbols/street.ts';
-import { shopFront, cornerShop, cafeSeating, marketStall } from './symbols/highstreet.ts';
+import { shopFront, cornerShop, marketStall } from './symbols/highstreet.ts';
 import { discoverSprites } from './spriteAuto.ts';
 import { SKIN_TONES, HAIR_COLORS } from './style.ts';
 
@@ -159,7 +159,8 @@ const HAND_ASSETS: AssetDef[] = [
   // High street / neighbourhood (dedicated renderers, mirror-based)
   { id: 'shop-front', category: 'physical-infra', footprint: { w: 2, d: 1 }, orientations: 2, render: shopFront, paramSchema: shopSchema },
   { id: 'corner-shop', category: 'physical-infra', footprint: { w: 1, d: 1 }, orientations: 2, render: cornerShop, paramSchema: shopSchema },
-  { id: 'cafe-seating', category: 'prop', footprint: { w: 1, d: 1 }, orientations: 2, render: cafeSeating },
+  // 'cafe-seating' vector retired 2026-07-10 — replaced by the Variant-B
+  // flat-colour sprite in sprites/cafe-seating.png (same id, auto-discovered).
   { id: 'market-stall', category: 'prop', footprint: { w: 1, d: 1 }, orientations: 2, render: marketStall },
 
   // Digital infra
