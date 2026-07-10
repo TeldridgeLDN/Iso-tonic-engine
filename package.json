@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "contact-sheet": "vite-node scripts/contact-sheet.ts",
-    "ref-overlay": "vite-node scripts/ref-overlay.ts"
+    "ref-overlay": "vite-node scripts/ref-overlay.ts",
+    "prototype:staffed-desk": "vite-node scripts/prototype-staffed-desk.ts"
   },
   "devDependencies": {
     "typescript": "~6.0.2",
