@@ -15,7 +15,6 @@ import {
 } from './terrain.ts';
 import { renderCallout } from './callout.ts';
 import { serverRack, desktopWorkstation, laptopDesk, wallScreen, networkMast } from './symbols/digital.ts';
-import { treeRound, treeConifer, planter, streetLamp, signpost } from './symbols/street.ts';
 import { shopFront, cornerShop } from './symbols/highstreet.ts';
 import { discoverSprites } from './spriteAuto.ts';
 import { SKIN_TONES, HAIR_COLORS } from './style.ts';
@@ -190,11 +189,9 @@ const HAND_ASSETS: AssetDef[] = [
   // retired 2026-07-10 — replaced by Variant-B flat-colour sprites (same ids).
 
   // Street / greenery (props) — radially symmetric, orientations 1
-  { id: 'tree-round', category: 'prop', footprint: { w: 1, d: 1 }, render: treeRound },
-  { id: 'tree-conifer', category: 'prop', footprint: { w: 1, d: 1 }, render: treeConifer },
-  { id: 'planter', category: 'prop', footprint: { w: 1, d: 1 }, render: planter },
-  { id: 'street-lamp', category: 'prop', footprint: { w: 1, d: 1 }, render: streetLamp },
-  { id: 'signpost', category: 'prop', footprint: { w: 1, d: 1 }, render: signpost },
+  // 'tree-round', 'tree-conifer', 'planter', 'street-lamp' and 'signpost'
+  // vectors retired 2026-07-10 — replaced by Variant-B flat-colour sprites
+  // (same ids, auto-discovered; street.ts import removed).
 
   // Terrain (ground plane — renders beneath structures)
   { id: 'road-straight', category: 'prop', footprint: { w: 1, d: 1 }, ground: true, orientations: 2, render: roadStraight },
