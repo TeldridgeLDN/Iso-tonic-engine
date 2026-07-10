@@ -197,16 +197,25 @@ resizable assets stay vector. To keep dropped-in sprites looking like one set �
 and to keep the `prep-sprite` matte-keying reliable — every sprite must be
 authored (or generated) to this contract.
 
-### The house sprite-art style contract
+### The house sprite-art style contract — "Variant B" flat-colour illustration
+
+Decision (2026-07-10, staffed-desk prototype): sprites are authored in the
+**flat-colour isometric illustration style** of the winning Variant B — NOT the
+engine's monochrome line art. During migration the map will mix the two styles;
+vector line-art assets are expected to be progressively replaced or restyled.
+Parametric assets that must stay vector (buildings, figurine, zones) remain
+line art until a restyling pass — this clash is accepted and deliberate.
 
 Every committed sprite must be:
 
-- **Monochrome line art** — black ink outline on white, matching the engine's
-  `INK`-on-`PAPER` look. No full-colour rendering, no gradients, no painterly
-  shading. Flat fills only where a solid is needed.
-- **Consistent stroke weight** — one uniform outline thickness across the whole
-  subject (and consistent between sprites), so a sprite sits beside hand-authored
-  line art without looking heavier or lighter.
+- **Flat-colour vector-illustration style** — clean flat fills, each surface a
+  single solid tone, with at most one lighter/darker step between adjacent faces
+  to model form (like commercial "isometric flat vector" stock art). No
+  gradients, no texture, no painterly shading, no photorealism. Thin outlines
+  optional; if present, keep them subtle and consistent.
+- **A restrained shared palette** — muted, slightly desaturated colours; greys
+  for furniture/tech, one or two accent colours per object maximum. Sprites must
+  look like one illustration set, not a collage.
 - **Isometric corner view, facing the viewer** — the subject is seen from a
   front-corner ¾ angle (two faces visible), the same orientation the existing
   vector assets present (a corner pointing at the camera, long edges running
@@ -234,13 +243,15 @@ past native px upscales/softens). `prep-sprite` caps the long side at 512 px.
 Fill the `{…}` slots. Keep the trailing style clause verbatim — it encodes the
 contract above.
 
-> `{SUBJECT}`, drawn as **2:1 isometric line art**, viewed from a front-corner
-> three-quarter angle with two faces showing (a corner pointing toward the
-> viewer). **Black ink outline of uniform stroke weight on a pure white
-> `#FFFFFF` background**, flat fills only, monochrome. The subject fills the
-> frame with a thin margin. **No background, no drop shadow, no cast shadow, no
-> ground plane or floor, no text, no border.** Clean vector-style linework, even
-> line thickness throughout.
+> `{SUBJECT}`, drawn as a **flat vector isometric illustration**, viewed from a
+> front-corner three-quarter angle with two faces showing (a corner pointing
+> toward the viewer). **Flat solid colour fills, muted slightly-desaturated
+> palette, one lighter and one darker tone per surface pair to model form, no
+> gradients, no outlines heavier than a hairline.** Pure white `#FFFFFF`
+> background. The subject fills the frame with a thin margin. **No background
+> scene, no drop shadow, no cast shadow, no ground plane or floor, no text, no
+> border.** Clean minimal commercial isometric-flat style, like premium flat
+> vector stock illustration.
 
 Per-category variants — swap the `{SUBJECT}` and note the naming/footprint:
 
