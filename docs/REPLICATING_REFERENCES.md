@@ -187,3 +187,93 @@ image it reports `orientations: 1` (one billboard reused at every facing).
   svg2pdf **embeds the PNG as a raster image** inside the PDF (it does not
   vectorise it) — fine for viewing, but the sprite won't scale losslessly like
   the vector line-art around it.
+
+## Sprite art style contract + generation prompts
+
+Sprites are the chosen path for any asset containing a **posed human or organic
+form** (staffed desks, people, animals, plants-as-photos, vehicles-with-a-driver)
+— line art cannot carry a legible pose at ~46 px. Furniture / parametric /
+resizable assets stay vector. To keep dropped-in sprites looking like one set —
+and to keep the `prep-sprite` matte-keying reliable — every sprite must be
+authored (or generated) to this contract.
+
+### The house sprite-art style contract
+
+Every committed sprite must be:
+
+- **Monochrome line art** — black ink outline on white, matching the engine's
+  `INK`-on-`PAPER` look. No full-colour rendering, no gradients, no painterly
+  shading. Flat fills only where a solid is needed.
+- **Consistent stroke weight** — one uniform outline thickness across the whole
+  subject (and consistent between sprites), so a sprite sits beside hand-authored
+  line art without looking heavier or lighter.
+- **Isometric corner view, facing the viewer** — the subject is seen from a
+  front-corner ¾ angle (two faces visible), the same orientation the existing
+  vector assets present (a corner pointing at the camera, long edges running
+  down-left and down-right). It is a flat **camera-facing billboard**, not
+  geometry laid on the ground — do not pre-foreshorten it onto a floor.
+- **Pure white background** — a flat `#FFFFFF` field with **nothing** behind the
+  subject. `prep-sprite` keys out every pixel whose R, G **and** B are all `> 235`
+  and trims to what remains; any off-white wash, texture, vignette, or coloured
+  backdrop will survive the key and leave a halo. Keep whites inside the subject
+  (eyes, paper, highlights) at ≤ 235 on at least one channel, or outline them, so
+  they are not eaten by the matte.
+- **No drop shadow, no cast shadow, no ground plane** — the engine draws the
+  footprint diamond and handles depth. A baked shadow or floor patch keys
+  inconsistently and double-draws under the real diamond.
+- **Subject fills the frame** — crop tight; the subject should occupy nearly the
+  whole canvas with only a thin margin. `prep-sprite` trims to the content bbox
+  anyway, but a tight source avoids wasted resolution before the ≤ 512 px
+  downscale.
+
+Author at or above the largest on-screen size you'll use (enlarging `widthPx`
+past native px upscales/softens). `prep-sprite` caps the long side at 512 px.
+
+### Reusable generation prompt template
+
+Fill the `{…}` slots. Keep the trailing style clause verbatim — it encodes the
+contract above.
+
+> `{SUBJECT}`, drawn as **2:1 isometric line art**, viewed from a front-corner
+> three-quarter angle with two faces showing (a corner pointing toward the
+> viewer). **Black ink outline of uniform stroke weight on a pure white
+> `#FFFFFF` background**, flat fills only, monochrome. The subject fills the
+> frame with a thin margin. **No background, no drop shadow, no cast shadow, no
+> ground plane or floor, no text, no border.** Clean vector-style linework, even
+> line thickness throughout.
+
+Per-category variants — swap the `{SUBJECT}` and note the naming/footprint:
+
+- **Prop** (single facing, e.g. a market stall, a mug, a potted plant):
+  `{SUBJECT}` = the object at rest. Save one image → `prep-sprite -- art.png
+  --name my-prop --footprint 1x1`. Radially-symmetric or read-the-same-both-ways
+  props need only the one image (`orientations: 1`).
+- **Tree / greenery** (single facing): `{SUBJECT}` = the tree/shrub, trunk base
+  centred at the bottom edge, canopy filling the upper frame. One image, footprint
+  usually `1x1`. Trees read the same from every side, so do **not** author four
+  facings.
+- **Vehicle** (four facings): generate **four** images, one per orientation of
+  the same vehicle, appending to the subject: *"…facing north-east / south-east /
+  south-west / north-west along the isometric ground axes"* for orientations
+  0/1/2/3 respectively. Name them with the `.oN` convention so auto-discovery
+  groups them into one 4-facing asset:
+
+  ```bash
+  npm run prep-sprite -- car-ne.png --name car --footprint 2x1 --facing 0
+  npm run prep-sprite -- car-se.png --name car --facing 1
+  npm run prep-sprite -- car-sw.png --name car --facing 2
+  npm run prep-sprite -- car-nw.png --name car --facing 3
+  ```
+
+  This yields `car.o0.png … car.o3.png` + one shared `car.json` sidecar
+  (`orientations: 4`). Keep the vehicle's proportions and stroke identical across
+  the four so it doesn't "breathe" when rotated.
+
+### Licensing rule (do not skip)
+
+**Only user-generated or rights-cleared art may be committed** into
+`src/assets/sprites/`. AI-generated images you own, art you drew, or assets under
+a licence that permits redistribution are fine. Licensed stock, scraped images,
+or anything whose terms you haven't verified must stay **out of the repo** — the
+prototype's reference JPEG, for example, lived only in a gitignored file. When in
+doubt, treat it as not-clearable and don't commit it.
