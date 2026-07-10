@@ -259,6 +259,9 @@ const ID_ALIASES: Record<string, string> = {
   'sprite-demo': 'demo-crate',
   // Vector house replaced by the auto-discovered PNG sprite (2026-07-06).
   'house': 'house-small',
+  // "Intelligent prompt" is deliberately the same concept as the AI agent
+  // (2026-07-10 government-service concept set) — one sprite, two names.
+  'intelligent-prompt': 'ai-agent',
 };
 
 export function getAsset(id: string): AssetDef | undefined {
