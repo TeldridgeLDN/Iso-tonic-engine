@@ -94,36 +94,59 @@ All five passed at authoring time, and the reworked composition was rasterised
 and eyeballed in a browser: it reads as a person seated at the desk from behind,
 chair back centred and occluding the lower torso, forearms on the desktop.
 
-## How to run it
+## How it was run (prototype now deleted)
 
-```bash
-npm run prototype:staffed-desk
-# → writes prototype-staffed-desk.html at the repo root, prints the self-checks
-open prototype-staffed-desk.html      # then use ← / → or the pill to switch A/B/C
-```
+The prototype was driven by `npm run prototype:staffed-desk`, which wrote
+`prototype-staffed-desk.html` at the repo root (reference JPEG embedded as a
+gitignored, licensed data URI) and printed the Variant-C self-checks. A
+bottom-centre pill / arrow keys cycled A/B/C.
 
-The reference image (licensed stock) is copied to a gitignored repo-local file
-`ref-student-desk.jpg` at runtime and embedded as a data URI. Neither the copied
-image nor the generated HTML is committed.
+**Per the `/prototype` skill's throwaway rule, the prototype was removed once it
+answered its question** (verdict above). Deleted: `scripts/prototype-staffed-desk.ts`,
+the `prototype:staffed-desk` npm script, the prototype's `.gitignore` lines, and
+the generated `prototype-staffed-desk.html` + `ref-student-desk.jpg` on disk.
+**This notes file is the durable record.**
 
-`scripts/` is excluded from `tsconfig.json` (`include: ["src"]`), so the script
-is validated by running it via `vite-node`, not by `tsc`.
+## Verdict
 
-## Files
+**Variant B (sprite) won.** Viewed A/B/C against the reference at both 2× and 1×.
 
-- Committed: `scripts/prototype-staffed-desk.ts`, this notes file, the
-  `.gitignore` addition, the `package.json` npm script.
-- Gitignored (never committed): `prototype-staffed-desk.html`,
-  `ref-student-desk.jpg`.
+- **Sprites (B) read accurately; posed vectors do not — at size.** Two
+  numerically-verified iterations of posed-vector authoring (`deskSingleV3`,
+  reworked once after the first "person emerging from a desk" failure) passed
+  **all five mechanical self-checks** (no NaN, forearms on the computed desktop
+  plane, feet on the ground plane, desk→figure→chair-back painter order,
+  chair-back/torso bbox occlusion). Mechanically correct — yet at the real
+  display size (~46 px figure, the engine's standing-figurine anchor) the posed
+  vector still **reads poorly**: outline-only, uniform-stroke line art collapses
+  into noise on a body that small, exactly the detail-budget failure mode the
+  diagnosis predicted. Passing geometry checks did not buy legibility.
+- **Sprite trade-offs are acceptable for this asset class.** No token restyle,
+  one image per orientation, and a matte-cleaning step are real costs, but for a
+  staffed/organic subject the pixel fidelity of a raster cut-out beats anything
+  the line-art vocabulary can render at 46 px. The trade-offs (documented in
+  `docs/REPLICATING_REFERENCES.md`) are worth it here.
 
-## Verdict (fill in after viewing)
+**Decision — where each path applies:**
 
-_TODO — view `prototype-staffed-desk.html`, flip A/B/C against the reference, and
-record the decision here:_
+- **Sprites** for any asset that contains a **posed human or an organic form**
+  (staffed desks, people at work, animals, plants-as-photos, vehicles-with-a-
+  driver). Line art cannot carry a legible pose at prop scale.
+- **Vectors** remain for **furniture, parametric, and resizable** assets
+  (buildings, zones, roads/rivers, empty desks, shelving) — anything that
+  benefits from token restyle, free re-proportioning, orientation maths, or
+  lossless scaling.
 
-- Does Variant C read as a seated person at a desk (vs A)? …
-- Is the sprite path (B) worth the trade-offs (no token restyle, one image per
-  orientation, matte-cleaning dependency)? …
-- **Chosen approach for staffed desks:** …
-- Follow-up work if C is chosen (port `deskSingleV3` into `desks.ts`, apply the
-  same posing to `deskMeeting`, decide fill palette): …
+**Tiered sprite migration plan (before mass conversion, build the four
+infrastructure pieces first):**
+
+1. **Props + trees** — one image each (radially symmetric or single-facing).
+   Lowest risk; validates the prep→register→export loop end-to-end.
+2. **Vehicles** — four facings each (`car.o0.png` … `car.o3.png`), exercising
+   the per-orientation `.oN` variant path.
+3. **Parametric assets stay vector** — buildings/zones/terrain are NOT migrated;
+   they need the properties they'd lose as bitmaps.
+
+**Follow-up:** none for `deskSingleV3` — it is thrown away with the prototype
+(this decision supersedes "port it into `desks.ts`"). The staffed desk becomes a
+sprite via the tiered plan above.

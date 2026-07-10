@@ -23,7 +23,3 @@ dist-ssr
 *.sln
 *.sw?
 contact-sheet.svg
-
-# Throwaway prototype output + licensed reference image (never commit)
-prototype-staffed-desk.html
-ref-student-desk.jpg
