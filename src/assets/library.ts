@@ -15,11 +15,8 @@ import {
 } from './terrain.ts';
 import { renderCallout } from './callout.ts';
 import { serverRack, desktopWorkstation, laptopDesk, wallScreen, networkMast } from './symbols/digital.ts';
-import { deskCluster, meetingTable, shelving, barrier } from './symbols/furniture.ts';
-import { deskMeeting, deskReception } from './symbols/desks.ts';
-import { deskLaptopV2, deskWorkstationV2 } from './symbols/desks-v2.ts';
 import { treeRound, treeConifer, planter, streetLamp, signpost } from './symbols/street.ts';
-import { shopFront, cornerShop, marketStall } from './symbols/highstreet.ts';
+import { shopFront, cornerShop } from './symbols/highstreet.ts';
 import { discoverSprites } from './spriteAuto.ts';
 import { SKIN_TONES, HAIR_COLORS } from './style.ts';
 
@@ -160,7 +157,8 @@ const HAND_ASSETS: AssetDef[] = [
   { id: 'corner-shop', category: 'physical-infra', footprint: { w: 1, d: 1 }, orientations: 2, render: cornerShop, paramSchema: shopSchema },
   // 'cafe-seating' vector retired 2026-07-10 — replaced by the Variant-B
   // flat-colour sprite in sprites/cafe-seating.png (same id, auto-discovered).
-  { id: 'market-stall', category: 'prop', footprint: { w: 1, d: 1 }, orientations: 2, render: marketStall },
+  // 'market-stall' vector retired 2026-07-10 — replaced by the Variant-B
+  // flat-colour sprite in sprites/market-stall.png (same id, auto-discovered).
 
   // Digital infra
   { id: 'server-rack', category: 'digital-infra', footprint: { w: 1, d: 1 }, render: serverRack },
@@ -180,18 +178,16 @@ const HAND_ASSETS: AssetDef[] = [
   // four-facing sprite in sprites/tram.o0-3.png (same id, auto-discovered).
 
   // Furniture (props)
-  { id: 'desk-cluster', category: 'prop', footprint: { w: 2, d: 2 }, orientations: 2, render: deskCluster },
-  { id: 'meeting-table', category: 'prop', footprint: { w: 2, d: 1 }, orientations: 2, render: meetingTable },
+  // 'desk-cluster' and 'meeting-table' vectors retired 2026-07-10 — replaced by
+  // Variant-B flat-colour sprites (same ids, auto-discovered).
   // 'desk-single' vector retired 2026-07-10 — replaced by the Variant-B flat-colour
   // sprite in sprites/desk-single.png (same id, auto-discovered; deskSingle render kept
   // in desks.ts for reference until the staffed-desk migration completes).
-  { id: 'desk-meeting', category: 'prop', footprint: { w: 2, d: 1 }, orientations: 2, render: deskMeeting },
-  { id: 'desk-reception', category: 'prop', footprint: { w: 2, d: 2 }, orientations: 4, render: deskReception },
+  // 'desk-meeting' (citizen + agent scene) and 'desk-reception' vectors retired
+  // 2026-07-10 — replaced by Variant-B flat-colour sprites (same ids).
   // World-space (iso3) pilot rebuilds — double-pedestal desk with dress-ups.
-  { id: 'desk-laptop-v2', category: 'prop', footprint: { w: 2, d: 1 }, orientations: 2, render: deskLaptopV2 },
-  { id: 'desk-workstation-v2', category: 'prop', footprint: { w: 2, d: 1 }, orientations: 2, render: deskWorkstationV2 },
-  { id: 'shelving', category: 'prop', footprint: { w: 1, d: 1 }, orientations: 2, render: shelving },
-  { id: 'barrier', category: 'prop', footprint: { w: 1, d: 1 }, render: barrier },
+  // 'desk-laptop-v2', 'desk-workstation-v2', 'shelving' and 'barrier' vectors
+  // retired 2026-07-10 — replaced by Variant-B flat-colour sprites (same ids).
 
   // Street / greenery (props) — radially symmetric, orientations 1
   { id: 'tree-round', category: 'prop', footprint: { w: 1, d: 1 }, render: treeRound },
