@@ -16,6 +16,8 @@ export interface ToolbarHooks {
   toggleMode(): void;
   /** Notify the operator (missing io, save result). Console fallback if absent. */
   notify(message: string): void;
+  /** View-only toolbar: title + Export + zoom only (public root page). */
+  viewer?: boolean;
 }
 
 export interface ToolbarHandles {
@@ -29,15 +31,26 @@ export function buildToolbar(hooks: ToolbarHooks): ToolbarHandles {
 
   const title = el('span', { class: 'iso-title', text: 'Iso-tonic Engine' });
 
-  const newBtn = button('New map', () => hooks.onNewMap(), 'iso-btn');
-  const openBtn = button('Open', () => openDoc(hooks), 'iso-btn');
-  const saveBtn = button('Save', () => saveDoc(hooks, false), 'iso-btn');
-  const saveAsBtn = button('Save As', () => saveDoc(hooks, true), 'iso-btn');
-
   const exportWrap = buildExportMenu(hooks);
 
   const spacer = el('span', { class: 'iso-spacer' });
   const zoomLabel = el('span', { class: 'iso-zoom' });
+
+  if (hooks.viewer) {
+    // View-only public page: title + Export + zoom. No file/undo/mode buttons.
+    bar.append(title, el('span', { class: 'iso-tb-sep' }), exportWrap, spacer, zoomLabel);
+    return {
+      root: bar,
+      refresh(state) {
+        zoomLabel.textContent = `${state.zoomPct}%`;
+      },
+    };
+  }
+
+  const newBtn = button('New map', () => hooks.onNewMap(), 'iso-btn');
+  const openBtn = button('Open', () => openDoc(hooks), 'iso-btn');
+  const saveBtn = button('Save', () => saveDoc(hooks, false), 'iso-btn');
+  const saveAsBtn = button('Save As', () => saveDoc(hooks, true), 'iso-btn');
 
   const undoBtn = button('Undo', () => hooks.history.undo());
   const redoBtn = button('Redo', () => hooks.history.redo());

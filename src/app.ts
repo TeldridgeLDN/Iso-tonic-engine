@@ -66,8 +66,13 @@ export class App implements AppContext {
   private wizard!: Wizard;
   private readonly selectionListeners: (() => void)[] = [];
 
-  constructor(root: HTMLElement, doc: SceneDocument) {
+  /** View-only mode: present-locked, no palette/panels/wizard/editing. */
+  private readonly viewer: boolean;
+
+  constructor(root: HTMLElement, doc: SceneDocument, opts: { viewer?: boolean } = {}) {
     this.root = root;
+    this.viewer = opts.viewer ?? false;
+    if (this.viewer) this.mode = 'present';
     // Registry-aware backfill heals pre-seeding docs (saved maps, demo/example):
     // grid zones/buildings missing their size params get them from the footprint.
     const healed = backfillSizeParams(doc);
@@ -159,6 +164,7 @@ export class App implements AppContext {
   }
 
   beginPlacement(req: PlacementRequest): void {
+    if (this.viewer) return;
     this.placement.begin(req);
     this.svg.classList.add('is-placing');
   }
@@ -202,13 +208,17 @@ export class App implements AppContext {
       onOpened: (doc) => this.replaceDocument(doc),
       toggleMode: () => this.toggleMode(),
       notify: (m) => this.showToast(m),
+      viewer: this.viewer,
     });
 
-    // Three-pane layout host.
+    // Three-pane layout host (viewer: canvas only, no side columns).
     const main = el('div', { class: 'iso-main' });
 
-    this.palette = new Palette(this);
-    const paletteCol = collapsibleColumn('palette-col', this.palette.root, 'left');
+    let paletteCol: HTMLElement | undefined;
+    if (!this.viewer) {
+      this.palette = new Palette(this);
+      paletteCol = collapsibleColumn('palette-col', this.palette.root, 'left');
+    }
 
     const stage = el('div', { class: 'iso-stage' });
     this.svg = document.createElementNS(SVGNS, 'svg') as SVGSVGElement;
@@ -229,23 +239,28 @@ export class App implements AppContext {
     this.toast.hidden = true;
     stage.append(this.svg, this.canvasTools.root, this.tooltip, this.toast);
 
-    const layers = new LayersPanel(this);
-    const props = new PropertiesPanel(this);
-    const rightCol = collapsibleColumn(
-      'panels-col',
-      el('div', { class: 'iso-right-stack' }, [props.root, layers.root]),
-      'right'
-    );
-
-    main.append(paletteCol, stage, rightCol);
+    if (this.viewer) {
+      main.append(stage);
+    } else {
+      const layers = new LayersPanel(this);
+      const props = new PropertiesPanel(this);
+      const rightCol = collapsibleColumn(
+        'panels-col',
+        el('div', { class: 'iso-right-stack' }, [props.root, layers.root]),
+        'right'
+      );
+      main.append(paletteCol!, stage, rightCol);
+    }
     this.root.append(this.toolbar.root, main);
 
-    // Wizard modal (created once, opened on demand).
-    this.wizard = new Wizard({
-      onComplete: (doc) => this.replaceDocument(doc),
-      onBlank: (doc) => this.replaceDocument(doc),
-      onLoadDemo: () => this.loadDemo(),
-    });
+    // Wizard modal (created once, opened on demand). Never in viewer mode.
+    if (!this.viewer) {
+      this.wizard = new Wizard({
+        onComplete: (doc) => this.replaceDocument(doc),
+        onBlank: (doc) => this.replaceDocument(doc),
+        onLoadDemo: () => this.loadDemo(),
+      });
+    }
   }
 
   /** Rebuild the whole shell DOM (used after replaceDocument). */
@@ -457,6 +472,7 @@ export class App implements AppContext {
   // --- mode / camera / keyboard ------------------------------------------
 
   private toggleMode(): void {
+    if (this.viewer) return; // viewer is locked to present mode
     this.mode = this.mode === 'edit' ? 'present' : 'edit';
     // Present mode has no zone resizing — force the tool back to select.
     if (this.mode === 'present') this.tool = 'select';
@@ -506,6 +522,7 @@ export class App implements AppContext {
   private onResize = (): void => this.render();
 
   private onKeyDown = (evt: KeyboardEvent): void => {
+    if (this.viewer) return; // no keyboard editing (undo/redo/rotate/tools)
     const target = evt.target as HTMLElement | null;
     const typing =
       target &&
@@ -609,6 +626,7 @@ export class App implements AppContext {
 
   /** Open the interview wizard (used at startup for an empty scene). */
   openWizard(): void {
+    if (this.viewer) return; // no wizard exists in viewer mode
     this.wizard.open();
   }
 

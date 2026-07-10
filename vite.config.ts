@@ -1,3 +1,4 @@
+import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vite';
 
 // BASE_PATH is set by the GitHub Pages workflow (/Iso-tonic-engine/);
@@ -6,6 +7,12 @@ export default defineConfig({
   base: process.env.BASE_PATH ?? '/',
   build: {
     rollupOptions: {
+      // Multi-page: root = view-only public entry, /edit/ = full editor
+      // (StatiCrypt-encrypted in CI). Output lands at dist/edit/index.html.
+      input: {
+        main: fileURLToPath(new URL('index.html', import.meta.url)),
+        edit: fileURLToPath(new URL('edit/index.html', import.meta.url)),
+      },
       output: {
         // Sprite bundle-weight mitigation. spriteAuto.ts inlines every
         // src/assets/sprites/*.png as a base64 data URI (~100 KB/sprite). Left in
