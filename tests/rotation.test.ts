@@ -21,13 +21,15 @@ function van(id: string, x: number, y: number, rotation?: 0 | 1 | 2 | 3): Entity
 
 describe('planRotation', () => {
   it('returns null for a fixed asset (orientations 1 / absent)', () => {
-    // server-rack has no orientations declared → fixed.
+    // road-cross has no orientations declared (rotationally symmetric) → fixed.
+    // (server-rack, the previous example, now aliases to the rotatable
+    // gov-laptop sprite.)
     const e: Entity = {
       id: 'r',
       type: 'digital-infra',
       label: 'r',
       placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 1, d: 1 } },
-      asset: { symbol: 'server-rack' },
+      asset: { symbol: 'road-cross' },
     };
     expect(planRotation(docWith(e), e)).toBeNull();
   });
