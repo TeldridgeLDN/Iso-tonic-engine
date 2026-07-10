@@ -10,7 +10,8 @@
     "test": "vitest run",
     "contact-sheet": "vite-node scripts/contact-sheet.ts",
     "ref-overlay": "vite-node scripts/ref-overlay.ts",
-    "prep-sprite": "vite-node scripts/prep-sprite.ts"
+    "prep-sprite": "vite-node scripts/prep-sprite.ts",
+    "gen-sprite": "vite-node scripts/gen-sprite.ts"
   },
   "devDependencies": {
     "sharp": "^0.35.3",
