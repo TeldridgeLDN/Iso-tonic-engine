@@ -14,7 +14,7 @@ import {
   renderIslandCoastline,
 } from './terrain.ts';
 import { renderCallout } from './callout.ts';
-import { serverRack, desktopWorkstation, laptopDesk, wallScreen, telephone, networkMast } from './symbols/digital.ts';
+import { serverRack, desktopWorkstation, laptopDesk, wallScreen, networkMast } from './symbols/digital.ts';
 import { van, car, tram } from './symbols/vehicles.ts';
 import { deskCluster, meetingTable, shelving, barrier } from './symbols/furniture.ts';
 import { deskMeeting, deskReception } from './symbols/desks.ts';
@@ -167,7 +167,8 @@ const HAND_ASSETS: AssetDef[] = [
   { id: 'desktop-workstation', category: 'digital-infra', footprint: { w: 1, d: 1 }, orientations: 2, render: desktopWorkstation },
   { id: 'laptop-desk', category: 'digital-infra', footprint: { w: 1, d: 1 }, orientations: 2, render: laptopDesk },
   { id: 'wall-screen', category: 'digital-infra', footprint: { w: 2, d: 1 }, orientations: 2, render: wallScreen },
-  { id: 'telephone', category: 'digital-infra', footprint: { w: 1, d: 1 }, orientations: 2, render: telephone },
+  // 'telephone' vector retired 2026-07-10 — replaced by the Variant-B flat-colour
+  // sprite in sprites/telephone.png (same id, auto-discovered).
   { id: 'network-mast', category: 'digital-infra', footprint: { w: 1, d: 1 }, render: networkMast },
 
   // Vehicles (physical infra)
