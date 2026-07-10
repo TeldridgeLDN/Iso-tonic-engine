@@ -28,6 +28,20 @@ jobs:
       - run: npm run build
         env:
           BASE_PATH: /Iso-tonic-engine/
+      # Password-protect ONLY the editor page. StatiCrypt v3 AES-encrypts the
+      # HTML in place (verified locally: with `-d dist/edit` the input file is
+      # replaced by the password page; the public root dist/index.html is
+      # untouched). Fixed salt keeps "remember me" stable across deploys;
+      # `-c false` stops StatiCrypt writing a .staticrypt.json config. The two
+      # greps fail the build loudly if the page ever ships unencrypted.
+      - name: Encrypt the editor page with StatiCrypt
+        env:
+          STATICRYPT_PASSWORD: ${{ secrets.PAGES_PASSWORD }}
+        run: |
+          [ -n "$STATICRYPT_PASSWORD" ] || { echo "::error::PAGES_PASSWORD secret not set"; exit 1; }
+          npx -y staticrypt@3 dist/edit/index.html --short -c false -s dfb91d13c2f3739680e0f4e39ee6773b -d dist/edit
+          grep -q "staticrypt" dist/edit/index.html || { echo "::error::editor page not encrypted"; exit 1; }
+          if grep -q 'id="app"' dist/edit/index.html; then echo "::error::plaintext editor page leaked"; exit 1; fi
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
