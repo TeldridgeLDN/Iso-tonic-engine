@@ -71,15 +71,33 @@ describe('spriteAsset', () => {
     expect(y + h).toBeCloseTo(6, 5); // 16 + (-10)
   });
 
-  it('reports orientations=1 for a single image, 4 for per-orientation variants', () => {
+  it('reports orientations=2 (mirror facing) for a single image, 4 for variants', () => {
     const single = spriteAsset({ footprint: { w: 1, d: 1 }, widthPx: 64, image: img });
-    expect(single.orientations).toBe(1);
+    expect(single.orientations).toBe(2);
     const varied = spriteAsset({
       footprint: { w: 1, d: 1 },
       widthPx: 64,
       image: [tinyPngDataUri(10, 10), tinyPngDataUri(20, 20)],
     });
     expect(varied.orientations).toBe(4);
+  });
+
+  it('mirrors a single-image sprite at odd facings, about its own centre', () => {
+    const single = spriteAsset({ footprint: { w: 1, d: 1 }, widthPx: 64, image: img });
+    expect(single.render({ orientation: 0 })).not.toContain('scale(-1 1)');
+    const odd = single.render({ orientation: 1 });
+    expect(odd).toContain('scale(-1 1)');
+    // Mirror is about the baseline centre x (footprint diamond centre = 0 for
+    // a 1x1 at origin), so translate(2*baseX) = translate(0) and the occupied
+    // box is unchanged — export bbox stays valid.
+    expect(odd).toContain('transform="translate(0 0) scale(-1 1)"');
+    // Per-orientation variant sprites do NOT mirror (each facing has real art).
+    const varied = spriteAsset({
+      footprint: { w: 1, d: 1 },
+      widthPx: 64,
+      image: [tinyPngDataUri(10, 10), tinyPngDataUri(20, 20)],
+    });
+    expect(varied.render({ orientation: 1 })).not.toContain('scale(-1');
   });
 
   it('reuses image 0 for missing orientation variants', () => {

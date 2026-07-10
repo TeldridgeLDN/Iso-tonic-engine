@@ -102,7 +102,7 @@ function variantFor(image: SpriteOptions['image'], orientation: number): PngData
 
 export interface AssetLike {
   footprint: { w: number; d: number };
-  orientations: 1 | 4;
+  orientations: 1 | 2 | 4;
   render(params?: Record<string, unknown>): string;
 }
 
@@ -110,7 +110,11 @@ export interface AssetLike {
  * Build an AssetDef-compatible sprite renderer. The returned object exposes
  * `footprint`, `orientations`, and `render()` — spread it into a library entry
  * (id/category) to register. `orientations` is 4 when per-orientation variants
- * are supplied, else 1 (a single billboard reused at every facing).
+ * are supplied, else 2: a single billboard shown as-is at even facings and
+ * HORIZONTALLY MIRRORED at odd facings. A billboard can't be truly rotated
+ * (it's a flat picture), but the mirror reads as "facing the other way" and
+ * lets the existing rotate UI (R key / properties-panel button) work on
+ * dropped-in sprites with zero extra art.
  */
 export function spriteAsset(opts: SpriteOptions): AssetLike {
   const { footprint, widthPx } = opts;
@@ -139,6 +143,13 @@ export function spriteAsset(opts: SpriteOptions): AssetLike {
     const x = baseX - widthPx / 2;
     const y = baseY - heightPx;
 
+    // Single-image sprites mirror at odd facings: reflect about the vertical
+    // line x = baseX. Because the billboard is centred on baseX, the mirrored
+    // rect occupies EXACTLY the same box (x/y/width/height attrs unchanged), so
+    // export bbox maths in svg-prep.ts stays valid without knowing about it.
+    const mirrored = !hasVariants && ((Math.round(o) % 4) + 4) % 4 % 2 === 1;
+    const transform = mirrored ? ` transform="translate(${n(2 * baseX)} 0) scale(-1 1)"` : '';
+
     // Emit BOTH href (SVG2, used by browsers rasterising SVG-in-<img> for PNG
     // export) and xlink:href (svg2pdf reads this first for PDF export). Both
     // point at the same base64 data URI — same-origin, so the PNG-export canvas
@@ -146,9 +157,9 @@ export function spriteAsset(opts: SpriteOptions): AssetLike {
     return (
       `<image href="${href}" xlink:href="${href}" x="${n(x)}" y="${n(y)}" ` +
       `width="${n(widthPx)}" height="${n(heightPx)}" ` +
-      `preserveAspectRatio="xMidYMax meet"/>`
+      `preserveAspectRatio="xMidYMax meet"${transform}/>`
     );
   };
 
-  return { footprint, orientations: hasVariants ? 4 : 1, render };
+  return { footprint, orientations: hasVariants ? 4 : 2, render };
 }
