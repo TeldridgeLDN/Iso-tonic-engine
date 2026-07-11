@@ -168,7 +168,10 @@ describe('validateDocument — reject', () => {
 
   it('rejects non-string userGoal / orgGoal', () => {
     const doc = baseDoc();
-    doc.entities = [entity({ id: 'a', userGoal: 42 })];
+    // type 'user': the old zone types (team/department/…) are migrated to
+    // territory with goals STRIPPED before validation, so a zone-typed fixture
+    // would no longer exercise this rule.
+    doc.entities = [entity({ id: 'a', type: 'user', userGoal: 42 })];
     const res = validateDocument(doc);
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.errors.some((e) => e.includes('userGoal'))).toBe(true);

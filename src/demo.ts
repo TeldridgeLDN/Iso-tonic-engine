@@ -10,52 +10,43 @@ function ent(e: Entity): Entity {
 }
 
 /**
- * A small service map: an organisation plate, two department zones, buildings,
- * digital + physical infra, figurines, a process zone and two callouts (one
- * with a leader to an anchored entity).
+ * A small service map: an organisation-wide territory, two nested territories,
+ * buildings, digital + physical infra, figurines, a process territory and two
+ * callouts (one with a leader to an anchored entity). Territories are
+ * unlabeled ground plates (zone kinds collapsed 2026-07).
  */
 export function buildDemoScene(): SceneDocument {
   const doc = createEmptyDocument('Demo Service Map', '2026-07-05T00:00:00.000Z');
 
   const entities: Entity[] = [
-    // Organisation ground plate (large dashed diamond under everything).
+    // Organisation-wide ground territory (large dashed diamond under everything).
     ent({
       id: 'org-1',
-      type: 'organisation',
+      type: 'territory',
       label: 'Acme Public Services',
       description: 'The whole organisation footprint.',
       placement: { mode: 'grid', x: -1, y: -1, footprint: { w: 10, d: 8 } },
-      // Plaque params on the org zone: numbered badge + user-group glyph row.
-      asset: {
-        symbol: 'department-zone',
-        params: {
-          w: 10,
-          d: 8,
-          label: 'ACME PUBLIC SERVICES',
-          number: 1,
-          userGroups: 'Residents, Staff, Partners',
-        },
-      },
+      asset: { symbol: 'territory', params: { w: 10, d: 8 } },
     }),
 
-    // Two department zones inside the org.
+    // Two territories inside the org footprint.
     ent({
       id: 'dept-ops',
-      type: 'department',
+      type: 'territory',
       label: 'Operations',
       description: 'Field operations & logistics.',
       parentId: 'org-1',
       placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 4, d: 3 } },
-      asset: { symbol: 'department-zone', params: { w: 4, d: 3, label: 'OPERATIONS' } },
+      asset: { symbol: 'territory', params: { w: 4, d: 3 } },
     }),
     ent({
       id: 'dept-digital',
-      type: 'department',
+      type: 'territory',
       label: 'Digital',
       description: 'Platform & data teams.',
       parentId: 'org-1',
       placement: { mode: 'grid', x: 5, y: 0, footprint: { w: 3, d: 3 } },
-      asset: { symbol: 'department-zone', params: { w: 3, d: 3, label: 'DIGITAL' } },
+      asset: { symbol: 'territory', params: { w: 3, d: 3 } },
     }),
 
     // Buildings (parametric params exercised).
@@ -235,15 +226,15 @@ export function buildDemoScene(): SceneDocument {
       asset: { symbol: 'figurine', params: { skin: 'tone-5', hairStyle: 'bun', hairColor: 'grey', top: 'shirt', bottom: 'trousers', accessory: 'none' } },
     }),
 
-    // Process zone (dotted) overlapping the operations flow.
+    // Process territory overlapping the operations flow.
     ent({
       id: 'proc-1',
-      type: 'process',
+      type: 'territory',
       label: 'Dispatch Process',
       description: 'Order → dispatch → delivery.',
       parentId: 'dept-ops',
       placement: { mode: 'grid', x: 0, y: 3, footprint: { w: 3, d: 2 } },
-      asset: { symbol: 'process-zone', params: { w: 3, d: 2, label: 'DISPATCH' } },
+      asset: { symbol: 'territory', params: { w: 3, d: 2 } },
     }),
 
     // Two callouts (annotations, always on top). One anchored w/ leader.

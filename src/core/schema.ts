@@ -29,15 +29,106 @@ const ENTITY_TYPE_SET = new Set<string>(ALL_ENTITY_TYPES);
 // Migration
 // ---------------------------------------------------------------------------
 
+// Zone → territory migration (2026-07, expand→migrate→contract). All old zone
+// entity types collapse into the single unlabeled `territory` type; the two
+// zone asset symbols map to the `territory` asset (decorative plates keep their
+// own renderers as territory variants); label/plaque params and zone goals are
+// stripped — labels are discarded permanently, by design.
+//
+// In-place v1 rewrite, NO version bump: the rewrite is idempotent by
+// construction (a migrated document contains none of the old markers, so
+// re-migrating is the identity), which makes a version marker unnecessary.
+const OLD_ZONE_TYPES = new Set(['department', 'process', 'organisation', 'team']);
+const OLD_ZONE_SYMBOLS: Record<string, string> = {
+  'department-zone': 'territory',
+  'process-zone': 'territory',
+};
+const STRIPPED_PARAM_KEYS = ['label', 'number', 'userGroups'] as const;
+const STRIPPED_GOAL_KEYS = ['userGoal', 'orgGoal'] as const;
+
 /**
- * Migrate a raw parsed object up to the current schema version.
- * v1 passes through unchanged. Structure is here so future versions add
- * cases keyed off `version`. Never mutates the input; returns raw as-is for v1.
+ * Migrate a raw parsed object up to the current schema shape.
+ * Currently: the zone→territory rewrite (in-place v1, idempotent). Never
+ * mutates the input; returns the SAME object when nothing needed migrating.
  */
 export function migrate(raw: unknown): unknown {
   if (!isObject(raw)) return raw;
-  // Future: while (raw.version < CURRENT) { ...bump... }
-  return raw;
+  return migrateZonesToTerritories(raw);
+}
+
+function migrateZonesToTerritories(
+  raw: Record<string, unknown>
+): Record<string, unknown> {
+  let changed = false;
+  let next: Record<string, unknown> = raw;
+
+  if (Array.isArray(raw.entities)) {
+    let entChanged = false;
+    const entities = raw.entities.map((ent) => {
+      const m = migrateZoneEntity(ent);
+      if (m !== ent) entChanged = true;
+      return m;
+    });
+    if (entChanged) {
+      next = { ...next, entities };
+      changed = true;
+    }
+  }
+
+  const folded = foldTypeLayerVisibility(raw.typeLayerVisibility);
+  if (folded !== raw.typeLayerVisibility) {
+    next = { ...next, typeLayerVisibility: folded };
+    changed = true;
+  }
+
+  return changed ? next : raw;
+}
+
+/** Rewrite one old-zone entity to a territory; anything else passes through. */
+function migrateZoneEntity(ent: unknown): unknown {
+  if (!isObject(ent)) return ent;
+
+  const oldType = typeof ent.type === 'string' && OLD_ZONE_TYPES.has(ent.type);
+  const asset = isObject(ent.asset) ? ent.asset : undefined;
+  const oldSymbol =
+    asset && typeof asset.symbol === 'string'
+      ? OLD_ZONE_SYMBOLS[asset.symbol]
+      : undefined;
+  if (!oldType && oldSymbol === undefined) return ent;
+
+  const out: Record<string, unknown> = { ...ent, type: 'territory' };
+  for (const k of STRIPPED_GOAL_KEYS) delete out[k];
+
+  if (asset) {
+    const nextAsset: Record<string, unknown> = { ...asset };
+    if (oldSymbol !== undefined) nextAsset.symbol = oldSymbol;
+    if (isObject(asset.params)) {
+      const params: Record<string, unknown> = { ...asset.params };
+      for (const k of STRIPPED_PARAM_KEYS) delete params[k];
+      nextAsset.params = params;
+    }
+    out.asset = nextAsset;
+  }
+  return out;
+}
+
+/**
+ * Fold old zone-type keys of typeLayerVisibility into the single `territory`
+ * key: visible if ANY old key (or an existing territory key) was visible.
+ * Returns the input object unchanged when no old keys are present.
+ */
+function foldTypeLayerVisibility(tlv: unknown): unknown {
+  if (!isObject(tlv)) return tlv;
+  const oldKeys = Object.keys(tlv).filter((k) => OLD_ZONE_TYPES.has(k));
+  if (oldKeys.length === 0) return tlv;
+
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(tlv)) {
+    if (!OLD_ZONE_TYPES.has(k)) out[k] = v;
+  }
+  const anyOldVisible = oldKeys.some((k) => tlv[k] === true);
+  out.territory = anyOldVisible || tlv.territory === true;
+  return out;
 }
 
 // ---------------------------------------------------------------------------
