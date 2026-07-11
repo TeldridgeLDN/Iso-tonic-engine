@@ -4,5 +4,9 @@
     "d": 1
   },
   "widthPx": 128,
-  "category": "physical-infra"
+  "category": "physical-infra",
+  "intrinsic": {
+    "w": 403,
+    "h": 345
+  }
 }

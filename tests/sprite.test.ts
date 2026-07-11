@@ -50,6 +50,37 @@ describe('spriteAsset', () => {
     expect(h).toBeCloseTo(32, 1); // 64 / (100/50)
   });
 
+  it('derives height from the sidecar intrinsic when supplied (no byte read)', () => {
+    // image is an external URL (no decodable bytes); intrinsic drives the aspect.
+    const svg = spriteAsset({
+      footprint: { w: 1, d: 1 },
+      widthPx: 64,
+      intrinsic: { w: 100, h: 50 },
+      image: '/src/assets/sprites/thing.png',
+    }).render();
+    const h = Number(/height="([\d.]+)"/.exec(svg)![1]);
+    expect(h).toBeCloseTo(32, 1); // 64 / (100/50)
+    expect(svg).toContain('href="/src/assets/sprites/thing.png"');
+  });
+
+  it('intrinsic wins over a decodable data-URI aspect', () => {
+    // img is 100×50 (2:1); intrinsic says 64×64 (1:1) → height should follow intrinsic.
+    const svg = spriteAsset({ footprint: { w: 1, d: 1 }, widthPx: 64, intrinsic: { w: 64, h: 64 }, image: img }).render();
+    const h = Number(/height="([\d.]+)"/.exec(svg)![1]);
+    expect(h).toBeCloseTo(64, 1);
+  });
+
+  it('falls back to a 1:1 aspect for a URL image with no intrinsic', () => {
+    const svg = spriteAsset({
+      footprint: { w: 1, d: 1 },
+      widthPx: 64,
+      image: '/src/assets/sprites/thing.png',
+    }).render();
+    const w = Number(/width="([\d.]+)"/.exec(svg)![1]);
+    const h = Number(/height="([\d.]+)"/.exec(svg)![1]);
+    expect(h).toBeCloseTo(w, 5); // square fallback (no bytes to read, no intrinsic)
+  });
+
   it('anchors the baseline (bottom-centre) on the footprint diamond centre', () => {
     // 1×1 footprint → centre project(0.5,0.5) = (0,16). Default anchor {0,0}.
     const svg = spriteAsset({ footprint: { w: 1, d: 1 }, widthPx: 64, image: img }).render();

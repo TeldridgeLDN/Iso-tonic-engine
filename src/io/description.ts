@@ -28,6 +28,7 @@ const TYPE_NOUN: Record<EntityType, string> = {
   'physical-infra': 'physical item',
   'digital-infra': 'digital system',
   annotation: 'annotation',
+  route: 'route',
 };
 
 // Order in which grouped child types are listed within a zone paragraph. Any

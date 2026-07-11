@@ -27,7 +27,7 @@ export interface IoModule {
   // Wave 2: written description + legend option on the visual exporters.
   buildWrittenDescription(doc: SceneDocument): string;
   exportDescription(doc: SceneDocument): void;
-  exportSVG(doc: SceneDocument, opts?: ExportOpts): void;
+  exportSVG(doc: SceneDocument, opts?: ExportOpts): Promise<void>;
   exportPNG(doc: SceneDocument, scale: 1 | 2 | 4, opts?: ExportOpts): Promise<void>;
   exportPDF(doc: SceneDocument, opts?: ExportOpts): Promise<void>;
 }

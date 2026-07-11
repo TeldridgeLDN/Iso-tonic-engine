@@ -36,6 +36,7 @@ const TYPE_NOUN_PL: Record<EntityType, string> = {
   'physical-infra': 'Physical',
   'digital-infra': 'Digital',
   annotation: 'Notes',
+  route: 'Routes',
 };
 
 // --- Panel width -------------------------------------------------------------

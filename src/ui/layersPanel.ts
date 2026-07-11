@@ -25,6 +25,7 @@ const TYPE_LABELS: Record<EntityType, string> = {
   'physical-infra': 'Physical infra',
   'digital-infra': 'Digital infra',
   annotation: 'Annotations',
+  route: 'Routes',
 };
 
 let layerSeq = 0;

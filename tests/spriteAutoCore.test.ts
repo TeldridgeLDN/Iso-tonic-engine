@@ -77,6 +77,33 @@ describe('coerceSidecar', () => {
     expect(coerceSidecar('nonsense')).toEqual({});
     expect(coerceSidecar({ anchor: { dx: 1 } })).toEqual({}); // dy missing
   });
+
+  it('keeps a well-formed intrinsic and drops a malformed one', () => {
+    expect(coerceSidecar({ intrinsic: { w: 490, h: 512 } })).toEqual({ intrinsic: { w: 490, h: 512 } });
+    expect(coerceSidecar({ intrinsic: { w: 0, h: 512 } })).toEqual({}); // non-positive
+    expect(coerceSidecar({ intrinsic: { w: '490', h: 512 } })).toEqual({}); // wrong type
+    expect(coerceSidecar({ intrinsic: 'nope' })).toEqual({});
+  });
+});
+
+describe('intrinsic threading', () => {
+  it('resolveSprite carries the sidecar intrinsic through', () => {
+    const s = resolveSprite('house', ['/sprites/house.png'], { intrinsic: { w: 490, h: 512 } });
+    expect(s.intrinsic).toEqual({ w: 490, h: 512 });
+  });
+
+  it('resolveSprite leaves intrinsic undefined when the sidecar omits it', () => {
+    const s = resolveSprite('house', ['/sprites/house.png'], undefined);
+    expect(s.intrinsic).toBeUndefined();
+  });
+
+  it('groupSprites threads a sidecar intrinsic onto the discovered sprite', () => {
+    const out = groupSprites(
+      { './sprites/house.png': '/src/assets/sprites/house.png' },
+      { './sprites/house.json': { intrinsic: { w: 200, h: 100 } } }
+    );
+    expect(out[0].intrinsic).toEqual({ w: 200, h: 100 });
+  });
 });
 
 describe('resolveSprite', () => {

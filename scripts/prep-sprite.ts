@@ -157,8 +157,18 @@ function keyWhiteAndBbox(data: Buffer, width: number, height: number, channels: 
   return { bbox, transparentInsideBbox };
 }
 
-/** Merge provided flag values into a (possibly existing) sidecar object. */
-function buildSidecar(existing: Record<string, unknown>, args: Args): Record<string, unknown> {
+/**
+ * Merge provided flag values into a (possibly existing) sidecar object. When
+ * `baseIntrinsic` is supplied (i.e. we just wrote the orientation-0 base image),
+ * record the PNG's pixel size so the runtime derives the billboard aspect ratio
+ * without decoding image bytes. Variant (`.oN`) writes leave any existing
+ * intrinsic untouched — it describes the base image only.
+ */
+function buildSidecar(
+  existing: Record<string, unknown>,
+  args: Args,
+  baseIntrinsic?: { w: number; h: number }
+): Record<string, unknown> {
   const out: Record<string, unknown> = { ...existing };
   // Only write keys the user provided, or defaults when the sidecar is brand new.
   const brandNew = Object.keys(existing).length === 0;
@@ -168,6 +178,7 @@ function buildSidecar(existing: Record<string, unknown>, args: Args): Record<str
   else if (brandNew) out.widthPx = 64;
   if (args.category) out.category = args.category;
   else if (brandNew) out.category = 'prop';
+  if (baseIntrinsic) out.intrinsic = baseIntrinsic;
   return out;
 }
 
@@ -216,15 +227,23 @@ async function main(): Promise<void> {
   // alpha channel for consistent compositing/export.
   await img.ensureAlpha().png({ compressionLevel: 9, effort: 10 }).toFile(outPath);
 
-  // sidecar: create if absent, merge provided flags if present
+  // read back the written PNG's pixel size (drives the sidecar `intrinsic`).
+  const outMeta = await sharp(outPath).metadata();
+
+  // sidecar: create if absent, merge provided flags if present. Only the
+  // orientation-0 base write records `intrinsic` (variants describe facings).
+  const isBaseWrite = args.facing === undefined;
+  const baseIntrinsic =
+    isBaseWrite && outMeta.width && outMeta.height
+      ? { w: outMeta.width, h: outMeta.height }
+      : undefined;
   const existing: Record<string, unknown> = existsSync(sidecarPath)
     ? (JSON.parse(readFileSync(sidecarPath, 'utf8')) as Record<string, unknown>)
     : {};
-  const sidecar = buildSidecar(existing, args);
+  const sidecar = buildSidecar(existing, args, baseIntrinsic);
   writeFileSync(sidecarPath, JSON.stringify(sidecar, null, 2) + '\n', 'utf8');
 
   // verify + report
-  const outMeta = await sharp(outPath).metadata();
   const hasAlpha = outMeta.hasAlpha === true;
   const okSize = (outMeta.width ?? 0) <= MAX_SIDE && (outMeta.height ?? 0) <= MAX_SIDE;
   // A cut-out with transparent pixels inside its bbox MUST retain an alpha
