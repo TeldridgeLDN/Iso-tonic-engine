@@ -15,8 +15,11 @@ import { INK, ACCENT } from '../assets/style.ts';
 import { resizeHandleScreen } from './resize.ts';
 
 export interface ViewState {
-  /** id of the entity under a persistent emphasis (selection). */
-  selectedId?: string;
+  /**
+   * ids under a persistent emphasis (selection). Mirrors the spotlightIds Set
+   * pattern so a multi-selection highlights every member with data-selected.
+   */
+  selectedIds?: Set<string>;
   /** id of the entity currently hovered (transient emphasis). */
   hoverId?: string;
   /**
@@ -63,7 +66,7 @@ function renderEntity(entity: Entity, view: ViewState): string {
   // turns into an ACCENT drop-shadow. Kept as an attribute (not baked geometry)
   // so it never affects export.
   if (view.hoverId === entity.id) attrs.push('data-hover="true"');
-  if (view.selectedId === entity.id) attrs.push('data-selected="true"');
+  if (view.selectedIds?.has(entity.id)) attrs.push('data-selected="true"');
 
   // Present-mode spotlight dimming.
   if (view.spotlightIds && !view.spotlightIds.has(entity.id)) {

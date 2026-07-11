@@ -22,9 +22,11 @@ export interface AppContext {
   /** Subscribe to any document change; returns an unsubscribe fn. */
   subscribe(listener: () => void): () => void;
 
-  /** Currently-selected entity id (edit mode), or undefined. */
+  /** Primary (last-clicked) selected entity id (edit mode), or undefined. */
   selectedId(): string | undefined;
-  /** Programmatically set selection. */
+  /** Every selected entity id (edit mode); [] when nothing is selected. */
+  selectedIds(): string[];
+  /** Programmatically set selection (single entity, or clear). */
   select(id: string | undefined): void;
   /** Subscribe to selection changes; returns an unsubscribe fn. */
   onSelectionChange(listener: () => void): () => void;

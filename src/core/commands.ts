@@ -624,6 +624,40 @@ export class UpsertFigurinePreset implements Command {
 }
 
 // ---------------------------------------------------------------------------
+// CompoundCommand
+// ---------------------------------------------------------------------------
+
+/**
+ * A batch of commands treated as a single undoable step. `apply` runs the
+ * children in order; `invert` runs them in REVERSE order so each child's
+ * captured prior state (e.g. a DeleteEntity's original index) is restored
+ * against the document it was applied to. Used for multi-select batch delete.
+ */
+export class CompoundCommand implements Command {
+  readonly label: string;
+  private readonly commands: Command[];
+
+  constructor(label: string, commands: Command[]) {
+    this.label = label;
+    this.commands = commands;
+  }
+
+  apply(doc: SceneDocument): SceneDocument {
+    let next = doc;
+    for (const cmd of this.commands) next = cmd.apply(next);
+    return next;
+  }
+
+  invert(doc: SceneDocument): SceneDocument {
+    let next = doc;
+    for (let i = this.commands.length - 1; i >= 0; i--) {
+      next = this.commands[i].invert(next);
+    }
+    return next;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // History
 // ---------------------------------------------------------------------------
 

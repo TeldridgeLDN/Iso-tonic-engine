@@ -6,7 +6,7 @@
 
 import type { Camera, Entity, GridPlacement, Placement, SceneDocument } from './core/model.ts';
 import { byId } from './core/model.ts';
-import { History, RotateEntity } from './core/commands.ts';
+import { History, RotateEntity, DeleteEntity, CompoundCommand } from './core/commands.ts';
 import { planRotation } from './render/rotation.ts';
 import { presentSpotlight } from './render/spotlight.ts';
 import { renderScene, type ViewState } from './render/renderer.ts';
@@ -43,7 +43,11 @@ export class App implements AppContext {
   history: History;
   private mode: Mode = 'edit';
   private tool: Tool = 'select';
-  private selection: string | undefined;
+  // Multi-selection with a primary (last-clicked) member. All single-entity
+  // consumers (properties editing, rotation, resize handle, drag-move) key off
+  // `selectionPrimary`; the whole `selection` set drives highlight + batch delete.
+  private readonly selection = new Set<string>();
+  private selectionPrimary: string | undefined;
   private spotlight: string | undefined;
   private spotlightLayerId: string | undefined;
   private hoverId: string | undefined;
@@ -53,6 +57,7 @@ export class App implements AppContext {
 
   private svg!: SVGSVGElement;
   private sceneRoot!: SVGGElement;
+  private marqueeEl: SVGRectElement | undefined;
   private canvasTools!: CanvasToolbarHandles;
   private tooltip!: HTMLDivElement;
   private toast!: HTMLDivElement;
@@ -108,7 +113,11 @@ export class App implements AppContext {
   }
 
   selectedId(): string | undefined {
-    return this.selection;
+    return this.selectionPrimary;
+  }
+
+  selectedIds(): string[] {
+    return [...this.selection];
   }
 
   getMode(): Mode {
@@ -116,9 +125,45 @@ export class App implements AppContext {
   }
 
   select(id: string | undefined): void {
-    this.selection = id;
+    this.setSelection(id);
     this.notifySelection();
     this.render();
+  }
+
+  // --- selection helpers --------------------------------------------------
+
+  /** Replace the selection with a single entity (or clear when undefined). */
+  private setSelection(id: string | undefined): void {
+    this.selection.clear();
+    if (id) this.selection.add(id);
+    this.selectionPrimary = id;
+  }
+
+  /** Replace the selection with a set of ids (marquee). Primary = last id. */
+  private setSelectionMany(ids: string[]): void {
+    this.selection.clear();
+    for (const id of ids) this.selection.add(id);
+    this.selectionPrimary = ids.length ? ids[ids.length - 1] : undefined;
+  }
+
+  /** Shift+click: toggle one member; primary tracks the last-touched member. */
+  private toggleSelectionMember(id: string): void {
+    if (this.selection.has(id)) {
+      this.selection.delete(id);
+      if (this.selectionPrimary === id) {
+        const remaining = [...this.selection];
+        this.selectionPrimary = remaining[remaining.length - 1];
+      }
+    } else {
+      this.selection.add(id);
+      this.selectionPrimary = id;
+    }
+  }
+
+  /** Clear the whole selection (Escape, replaceDocument, toggleMode). */
+  private clearSelection(): void {
+    this.selection.clear();
+    this.selectionPrimary = undefined;
   }
 
   /** The active canvas tool (edit mode). */
@@ -175,7 +220,7 @@ export class App implements AppContext {
     const healed = backfillSizeParams(doc);
     this.history = new History(healed);
     this.camera = healed.camera ? { ...healed.camera } : defaultCamera();
-    this.selection = undefined;
+    this.clearSelection();
     this.spotlight = undefined;
     this.ghost = undefined;
     this.placement = this.makePlacementController();
@@ -194,6 +239,8 @@ export class App implements AppContext {
   private buildDom(): void {
     this.root.innerHTML = '';
     this.root.classList.add('iso-app');
+    // The svg is recreated below; any prior marquee overlay is now detached.
+    this.marqueeEl = undefined;
 
     this.toolbar = buildToolbar({
       history: this.history,
@@ -294,7 +341,7 @@ export class App implements AppContext {
 
     const renderDoc = this.renderDoc();
     const view: ViewState = {
-      selectedId: this.mode === 'edit' ? this.selection : undefined,
+      selectedIds: this.mode === 'edit' ? this.selection : undefined,
       hoverId: this.hoverId,
       showGrid: this.mode === 'edit',
       resizeHandleFor: this.resizeHandlePlacement(renderDoc),
@@ -343,8 +390,8 @@ export class App implements AppContext {
     this.svg.classList.toggle('is-resizing', editing && this.tool === 'resize');
 
     let hint: string | undefined;
-    if (editing && this.tool === 'select' && this.selection) {
-      const entity = byId(doc, this.selection);
+    if (editing && this.tool === 'select' && this.selectionPrimary) {
+      const entity = byId(doc, this.selectionPrimary);
       if (entity && isResizable(entity, getAsset(entity.asset.symbol))) {
         hint = 'Resize: drag the orange corner, hold Shift, or use the ⤡ tool';
       }
@@ -358,10 +405,10 @@ export class App implements AppContext {
    * from `doc` (the render doc) so the handle tracks any live resize ghost.
    */
   private resizeHandlePlacement(doc: SceneDocument): GridPlacement | undefined {
-    if (this.mode !== 'edit' || !this.selection || this.placement.active) {
+    if (this.mode !== 'edit' || !this.selectionPrimary || this.placement.active) {
       return undefined;
     }
-    const entity = byId(doc, this.selection);
+    const entity = byId(doc, this.selectionPrimary);
     if (!entity || entity.placement.mode !== 'grid') return undefined;
     if (!isResizable(entity, getAsset(entity.asset.symbol))) return undefined;
     return entity.placement;
@@ -378,7 +425,7 @@ export class App implements AppContext {
     return {
       history: this.history,
       getMode: () => this.mode,
-      getSelectedId: () => this.selection,
+      getSelectedId: () => this.selectionPrimary,
       getResizeArmed: () => this.tool === 'resize',
       getTool: () => this.tool,
       getCamera: () => this.camera,
@@ -393,10 +440,25 @@ export class App implements AppContext {
           this.placement.commit();
           return;
         }
-        this.selection = id;
+        this.setSelection(id);
         this.notifySelection();
         this.render();
       },
+      onToggleSelect: (id) => {
+        if (this.placement.active) {
+          this.placement.commit();
+          return;
+        }
+        this.toggleSelectionMember(id);
+        this.notifySelection();
+        this.render();
+      },
+      onMarquee: (ids) => {
+        this.setSelectionMany(ids);
+        this.notifySelection();
+        this.render();
+      },
+      setMarquee: (rect) => this.drawMarquee(rect),
       onSpotlight: (id) => {
         this.spotlightLayerId = undefined; // an entity click supersedes a layer spotlight
         this.spotlight = id === this.spotlight ? undefined : id;
@@ -460,7 +522,7 @@ export class App implements AppContext {
     this.mode = this.mode === 'edit' ? 'present' : 'edit';
     // Present mode has no zone resizing — force the tool back to select.
     if (this.mode === 'present') this.tool = 'select';
-    this.selection = undefined;
+    this.clearSelection();
     this.spotlight = undefined;
     this.spotlightLayerId = undefined;
     this.tooltip.hidden = true;
@@ -533,7 +595,7 @@ export class App implements AppContext {
         return;
       }
       if (!typing) {
-        this.selection = undefined;
+        this.clearSelection();
         this.spotlight = undefined;
         this.spotlightLayerId = undefined;
         this.tooltip.hidden = true;
@@ -548,9 +610,21 @@ export class App implements AppContext {
       this.mode === 'edit' &&
       (evt.key === 'r' || evt.key === 'R')
     ) {
-      if (this.selection && !this.placement.active) {
+      if (this.selectionPrimary && !this.placement.active) {
         evt.preventDefault();
         this.rotateSelected();
+      }
+    }
+    // Delete / Backspace removes every selected entity as one undo step.
+    if (
+      !typing &&
+      !meta &&
+      this.mode === 'edit' &&
+      (evt.key === 'Delete' || evt.key === 'Backspace')
+    ) {
+      if (this.selection.size > 0 && !this.placement.active) {
+        evt.preventDefault();
+        this.deleteSelected();
       }
     }
     // Tool shortcuts (edit mode, not while typing): V = select, Z = resize.
@@ -573,7 +647,7 @@ export class App implements AppContext {
    * rejected with the same toast + shake feedback as a bad drop.
    */
   rotateSelected(): void {
-    const id = this.selection;
+    const id = this.selectionPrimary;
     if (!id) return;
     const entity = byId(this.history.document, id);
     if (!entity) return;
@@ -589,6 +663,51 @@ export class App implements AppContext {
     this.history.execute(
       new RotateEntity({ entityId: entity.id, from: plan.from, to: plan.to })
     );
+  }
+
+  /**
+   * Delete every selected entity as ONE undo step. A single selection uses a
+   * plain DeleteEntity; two or more are wrapped in a CompoundCommand. No
+   * confirm — the operation is undoable (the properties-panel batch button
+   * carries the guarding confirm for deliberate mouse-driven deletes).
+   */
+  private deleteSelected(): void {
+    const ids = [...this.selection];
+    if (ids.length === 0) return;
+    const cmd =
+      ids.length === 1
+        ? new DeleteEntity(ids[0])
+        : new CompoundCommand(
+            `Delete ${ids.length} entities`,
+            ids.map((id) => new DeleteEntity(id))
+          );
+    this.clearSelection();
+    this.history.execute(cmd); // subscribe → render with the cleared selection
+    this.notifySelection();
+  }
+
+  /**
+   * Draw / update the shift+drag marquee rectangle in WORLD coords as a direct
+   * child of the canvas <svg> (a sibling of the scene group, so it survives the
+   * scene re-render). `undefined` removes it.
+   */
+  private drawMarquee(
+    rect: { x: number; y: number; w: number; h: number } | undefined
+  ): void {
+    if (!rect) {
+      this.marqueeEl?.remove();
+      this.marqueeEl = undefined;
+      return;
+    }
+    if (!this.marqueeEl) {
+      this.marqueeEl = document.createElementNS(SVGNS, 'rect') as SVGRectElement;
+      this.marqueeEl.setAttribute('class', 'iso-marquee');
+      this.svg.appendChild(this.marqueeEl);
+    }
+    this.marqueeEl.setAttribute('x', String(rect.x));
+    this.marqueeEl.setAttribute('y', String(rect.y));
+    this.marqueeEl.setAttribute('width', String(rect.w));
+    this.marqueeEl.setAttribute('height', String(rect.h));
   }
 
   /**
