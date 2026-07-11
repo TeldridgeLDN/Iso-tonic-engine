@@ -1,3 +1,4 @@
+import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vite';
 
 // BASE_PATH is set by the GitHub Pages workflow (/Iso-tonic-engine/);
@@ -15,4 +16,14 @@ import { defineConfig } from 'vite';
 // inlining at build time.
 export default defineConfig({
   base: process.env.BASE_PATH ?? '/',
+  build: {
+    rollupOptions: {
+      // Multi-page: root = view-only public entry, /edit/ = full editor
+      // (StatiCrypt-encrypted in CI). Output lands at dist/edit/index.html.
+      input: {
+        main: fileURLToPath(new URL('index.html', import.meta.url)),
+        edit: fileURLToPath(new URL('edit/index.html', import.meta.url)),
+      },
+    },
+  },
 });

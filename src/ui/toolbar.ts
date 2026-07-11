@@ -16,6 +16,8 @@ export interface ToolbarHooks {
   toggleMode(): void;
   /** Notify the operator (missing io, save result). Console fallback if absent. */
   notify(message: string): void;
+  /** View-only toolbar: title + Export + zoom only (public root page). */
+  viewer?: boolean;
 }
 
 export interface ToolbarHandles {
@@ -29,15 +31,28 @@ export function buildToolbar(hooks: ToolbarHooks): ToolbarHandles {
 
   const title = el('span', { class: 'iso-title', text: 'Iso-tonic Engine' });
 
+  const exportWrap = buildExportMenu(hooks);
+
+  const spacer = el('span', { class: 'iso-spacer' });
+  const zoomLabel = el('span', { class: 'iso-zoom' });
+
+  if (hooks.viewer) {
+    // View-only public page: title + Export + zoom. No file/undo/mode buttons.
+    bar.append(title, el('span', { class: 'iso-tb-sep' }), exportWrap, spacer, zoomLabel);
+    return {
+      root: bar,
+      refresh(state) {
+        zoomLabel.textContent = `${state.zoomPct}%`;
+      },
+    };
+  }
+
   const newBtn = button('New map', () => hooks.onNewMap(), 'iso-btn');
   const openBtn = button('Open', () => openDoc(hooks), 'iso-btn');
   const saveBtn = button('Save', () => saveDoc(hooks, false), 'iso-btn');
   const saveAsBtn = button('Save As', () => saveDoc(hooks, true), 'iso-btn');
 
-  const exportWrap = buildExportMenu(hooks);
-
-  const spacer = el('span', { class: 'iso-spacer' });
-  const zoomLabel = el('span', { class: 'iso-zoom' });
+  const myMapsWrap = buildMyMapsMenu(hooks);
 
   const undoBtn = button('Undo', () => hooks.history.undo());
   const redoBtn = button('Redo', () => hooks.history.redo());
@@ -48,7 +63,7 @@ export function buildToolbar(hooks: ToolbarHooks): ToolbarHandles {
   bar.append(
     title,
     el('span', { class: 'iso-tb-sep' }),
-    newBtn, openBtn, saveBtn, saveAsBtn, exportWrap,
+    newBtn, openBtn, saveBtn, saveAsBtn, exportWrap, myMapsWrap,
     spacer,
     zoomLabel, undoBtn, redoBtn, modeBtn
   );
@@ -94,6 +109,51 @@ function buildExportMenu(hooks: ToolbarHooks): HTMLElement {
   });
 
   wrap.append(trigger, menu);
+  return wrap;
+}
+
+// --- My maps ▾ menu (encrypted private gallery) -------------------------------
+
+/**
+ * "My maps" dropdown, populated from the encrypted-scenes manifest. Starts
+ * hidden; only revealed once the manifest fetch succeeds (so a deployment
+ * without published maps shows no button at all). myMaps.ts is lazy-imported
+ * to keep crypto/gallery code out of the initial chunk graph.
+ */
+function buildMyMapsMenu(hooks: ToolbarHooks): HTMLElement {
+  const wrap = el('div', { class: 'iso-menu' });
+  wrap.hidden = true;
+  const trigger = button('My maps ▾', () => {
+    wrap.classList.toggle('is-open');
+  }, 'iso-btn');
+  const menu = el('div', { class: 'iso-menu-list' });
+  wrap.append(trigger, menu);
+
+  document.addEventListener('pointerdown', (e) => {
+    if (!wrap.contains(e.target as Node)) wrap.classList.remove('is-open');
+  });
+
+  void (async () => {
+    try {
+      const mm = await import('./myMaps.ts');
+      const manifest = await mm.fetchManifest();
+      if (!manifest) return; // no gallery published — stay hidden
+      for (const map of manifest.maps) {
+        const item = button(map.title, () => {
+          wrap.classList.remove('is-open');
+          void mm.openMap(manifest, map, {
+            onOpened: hooks.onOpened,
+            notify: hooks.notify,
+          });
+        }, 'iso-menu-item');
+        menu.append(item);
+      }
+      wrap.hidden = false;
+    } catch {
+      // Module or fetch failure — leave the button hidden.
+    }
+  })();
+
   return wrap;
 }
 

@@ -46,6 +46,36 @@ npm run contact-sheet  # render every asset to contact-sheet.svg
 
 Deployed automatically to GitHub Pages on push to `main`.
 
+## Public viewer / private editor
+
+The deployed site has two pages:
+
+- **`/` (public)** — a view-only demo: the built-in scene in Present mode with
+  Export and pan/zoom, but no palette, panels, wizard, save/load, or shortcuts.
+- **`/edit/` (private)** — the full editor, AES-encrypted at deploy time by
+  [StatiCrypt](https://github.com/robinmoisson/staticrypt). CI reads the page
+  password from the `PAGES_PASSWORD` repository secret; the build fails loudly
+  if the page would ship unencrypted.
+
+### "My maps" encrypted gallery
+
+Personal `.iso.json` maps are published as ciphertext only (AES-GCM-256, key
+derived with PBKDF2/200k from a passphrase). Authoring workflow:
+
+```bash
+# 1. Edit a map in /edit/, Save As → private/scenes/<name>.iso.json
+#    (private/ is gitignored — plaintext never leaves this machine)
+# 2. Encrypt + regenerate the manifest:
+SCENES_PASSPHRASE='your strong passphrase' npm run encrypt-scenes
+# 3. Commit public/maps/*.enc + public/maps/manifest.json and push.
+```
+
+On the `/edit/` page a **My maps ▾** menu appears when a gallery manifest is
+published; picking a map prompts for the passphrase once per session and
+decrypts in the browser. The manifest's salt is public by design — the
+passphrase is the only secret. Delete `public/maps/manifest.json` before
+re-running the script to rotate the salt.
+
 ## Design docs
 
 | Doc | Contents |

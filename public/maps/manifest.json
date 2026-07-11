@@ -1,0 +1,15 @@
+{
+  "v": 1,
+  "kdf": {
+    "salt": "8382b4b4a1594434807249e4143d8efe",
+    "iterations": 200000,
+    "hash": "SHA-256"
+  },
+  "maps": [
+    {
+      "id": "the-corner-grind",
+      "title": "The Corner Grind",
+      "file": "the-corner-grind.iso.json.enc"
+    }
+  ]
+}
