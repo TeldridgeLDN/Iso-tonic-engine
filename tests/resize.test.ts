@@ -49,10 +49,10 @@ function buildingEntity(over: Partial<Entity> = {}): Entity {
 function zoneEntity(over: Partial<Entity> = {}): Entity {
   return {
     id: 'z',
-    type: 'department',
+    type: 'territory',
     label: 'z',
     placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 4, d: 3 } },
-    asset: { symbol: 'department-zone', params: { w: 4, d: 3, label: 'OPS' } },
+    asset: { symbol: 'territory', params: { w: 4, d: 3, label: 'OPS' } },
     ...over,
   };
 }
@@ -264,7 +264,7 @@ describe('ResizeEntity', () => {
     // sync on resize (old code left them absent → blank panel, drifting handle).
     const bare = zoneEntity({
       id: 'b',
-      asset: { symbol: 'department-zone' }, // no params at all
+      asset: { symbol: 'territory' }, // no params at all
     });
     const doc = docWith(bare);
     const cmd = new ResizeEntity({
@@ -284,7 +284,7 @@ describe('ResizeEntity', () => {
   it('resizes footprint only when paramKeys omitted (no params key introduced)', () => {
     const bare = zoneEntity({
       id: 'b',
-      asset: { symbol: 'department-zone' }, // no params
+      asset: { symbol: 'territory' }, // no params
     });
     const doc = docWith(bare);
     const cmd = new ResizeEntity({
@@ -304,7 +304,7 @@ describe('ResizeEntity', () => {
   it('preserves rotation and other params on resize', () => {
     const rotated = zoneEntity({
       placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 4, d: 3 }, rotation: 1 },
-      asset: { symbol: 'department-zone', params: { w: 4, d: 3, label: 'OPS', number: 5 } },
+      asset: { symbol: 'territory', params: { w: 4, d: 3, label: 'OPS', number: 5 } },
     });
     const doc = docWith(rotated);
     const cmd = new ResizeEntity({
@@ -365,7 +365,7 @@ describe('resolveResizeTarget', () => {
 
   // def lookup keyed by asset symbol.
   const defOf = (e: Entity): ResizeAssetDef | undefined =>
-    e.asset.symbol === 'department-zone' ? zoneDef : figurineDef;
+    e.asset.symbol === 'territory' ? zoneDef : figurineDef;
 
   it('targets the resizable zone directly under the pointer', () => {
     expect(resolveResizeTarget(zone, undefined, defOf)).toBe(zone);

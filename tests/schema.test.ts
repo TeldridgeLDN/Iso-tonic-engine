@@ -18,7 +18,7 @@ function baseDoc(): Record<string, unknown> {
 function entity(over: Record<string, unknown>): Record<string, unknown> {
   return {
     id: 'e',
-    type: 'team',
+    type: 'territory',
     label: 'e',
     placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 1, d: 1 } },
     asset: { symbol: 's' },

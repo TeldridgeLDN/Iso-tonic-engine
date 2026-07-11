@@ -59,10 +59,10 @@ describe('createEmptyDocument', () => {
 
 describe('byId / childrenOf', () => {
   const d = docWith([
-    ent({ id: 'org', type: 'organisation' }),
-    ent({ id: 'dept', type: 'department', parentId: 'org' }),
-    ent({ id: 'team', type: 'team', parentId: 'dept' }),
-    ent({ id: 'team2', type: 'team', parentId: 'dept' }),
+    ent({ id: 'org', type: 'territory' }),
+    ent({ id: 'dept', type: 'territory', parentId: 'org' }),
+    ent({ id: 'team', type: 'territory', parentId: 'dept' }),
+    ent({ id: 'team2', type: 'territory', parentId: 'dept' }),
   ]);
 
   it('finds by id', () => {
@@ -79,12 +79,12 @@ describe('byId / childrenOf', () => {
 describe('semanticRelatives', () => {
   // org → dept → { team (focal), team2 }; team → user
   const d = docWith([
-    ent({ id: 'org', type: 'organisation' }),
-    ent({ id: 'dept', type: 'department', parentId: 'org' }),
-    ent({ id: 'team', type: 'team', parentId: 'dept' }),
-    ent({ id: 'team2', type: 'team', parentId: 'dept' }),
+    ent({ id: 'org', type: 'territory' }),
+    ent({ id: 'dept', type: 'territory', parentId: 'org' }),
+    ent({ id: 'team', type: 'territory', parentId: 'dept' }),
+    ent({ id: 'team2', type: 'territory', parentId: 'dept' }),
     ent({ id: 'user', type: 'user', parentId: 'team' }),
-    ent({ id: 'unrelated', type: 'organisation' }),
+    ent({ id: 'unrelated', type: 'territory' }),
   ]);
 
   it('includes self, transitive parents, transitive children, and direct siblings', () => {
@@ -109,8 +109,8 @@ describe('semanticRelatives', () => {
 
   it('does not infinite-loop on a cycle', () => {
     const cyc = docWith([
-      ent({ id: 'a', type: 'team', parentId: 'b' }),
-      ent({ id: 'b', type: 'team', parentId: 'a' }),
+      ent({ id: 'a', type: 'territory', parentId: 'b' }),
+      ent({ id: 'b', type: 'territory', parentId: 'a' }),
     ]);
     const ids = semanticRelatives(cyc, 'a').map((e) => e.id);
     expect(ids).toContain('a');
@@ -120,18 +120,18 @@ describe('semanticRelatives', () => {
 
 describe('isEntityVisible', () => {
   it('visible by default', () => {
-    const d = docWith([ent({ id: 'a', type: 'team' })]);
+    const d = docWith([ent({ id: 'a', type: 'territory' })]);
     expect(isEntityVisible(d, byId(d, 'a')!)).toBe(true);
   });
 
   it('hidden when its type layer is hidden', () => {
-    const d = docWith([ent({ id: 'a', type: 'team' })]);
-    d.typeLayerVisibility = { team: false };
+    const d = docWith([ent({ id: 'a', type: 'territory' })]);
+    d.typeLayerVisibility = { territory: false };
     expect(isEntityVisible(d, byId(d, 'a')!)).toBe(false);
   });
 
   it('hidden when ANY custom layer is hidden', () => {
-    const d = docWith([ent({ id: 'a', type: 'team', customLayers: ['L1', 'L2'] })]);
+    const d = docWith([ent({ id: 'a', type: 'territory', customLayers: ['L1', 'L2'] })]);
     d.layers = [
       { id: 'L1', name: 'one', visible: true },
       { id: 'L2', name: 'two', visible: false },
@@ -148,8 +148,8 @@ describe('isEntityVisible', () => {
       { type: false, l1: false, l2: false, expected: false },
     ];
     for (const c of cases) {
-      const d = docWith([ent({ id: 'a', type: 'team', customLayers: ['L1', 'L2'] })]);
-      d.typeLayerVisibility = { team: c.type };
+      const d = docWith([ent({ id: 'a', type: 'territory', customLayers: ['L1', 'L2'] })]);
+      d.typeLayerVisibility = { territory: c.type };
       d.layers = [
         { id: 'L1', name: 'one', visible: c.l1 },
         { id: 'L2', name: 'two', visible: c.l2 },
@@ -201,12 +201,12 @@ describe('footprintsOverlap', () => {
 describe('spotlightSet', () => {
   it('includes semanticRelatives (self, parents, children, siblings)', () => {
     const d = docWith([
-      ent({ id: 'org', type: 'organisation' }),
-      ent({ id: 'dept', type: 'department', parentId: 'org' }),
-      ent({ id: 'team', type: 'team', parentId: 'dept' }),
-      ent({ id: 'team2', type: 'team', parentId: 'dept' }),
+      ent({ id: 'org', type: 'territory' }),
+      ent({ id: 'dept', type: 'territory', parentId: 'org' }),
+      ent({ id: 'team', type: 'territory', parentId: 'dept' }),
+      ent({ id: 'team2', type: 'territory', parentId: 'dept' }),
       ent({ id: 'user', type: 'user', parentId: 'team' }),
-      ent({ id: 'unrelated', type: 'organisation' }),
+      ent({ id: 'unrelated', type: 'territory' }),
     ]);
     const s = spotlightSet(d, 'team');
     expect(s.has('team')).toBe(true); // self
@@ -219,11 +219,11 @@ describe('spotlightSet', () => {
 
   it('adds every entity sharing at least one custom layer with the focal', () => {
     const d = docWith([
-      ent({ id: 'focal', type: 'team', customLayers: ['journey-A'] }),
-      ent({ id: 'sharesA', type: 'process', customLayers: ['journey-A'] }),
+      ent({ id: 'focal', type: 'territory', customLayers: ['journey-A'] }),
+      ent({ id: 'sharesA', type: 'territory', customLayers: ['journey-A'] }),
       ent({ id: 'sharesA2', type: 'user', customLayers: ['other', 'journey-A'] }),
-      ent({ id: 'noshare', type: 'team', customLayers: ['journey-B'] }),
-      ent({ id: 'nolayers', type: 'team' }),
+      ent({ id: 'noshare', type: 'territory', customLayers: ['journey-B'] }),
+      ent({ id: 'nolayers', type: 'territory' }),
     ]);
     d.layers = [
       { id: 'journey-A', name: 'A', visible: true },
@@ -240,10 +240,10 @@ describe('spotlightSet', () => {
 
   it('combines shared-layer group WITH parent/child/sibling chains', () => {
     const d = docWith([
-      ent({ id: 'org', type: 'organisation' }),
-      ent({ id: 'team', type: 'team', parentId: 'org', customLayers: ['L'] }),
+      ent({ id: 'org', type: 'territory' }),
+      ent({ id: 'team', type: 'territory', parentId: 'org', customLayers: ['L'] }),
       ent({ id: 'user', type: 'user', parentId: 'team' }), // child, no layer
-      ent({ id: 'crossCut', type: 'process', customLayers: ['L'] }), // shared layer only
+      ent({ id: 'crossCut', type: 'territory', customLayers: ['L'] }), // shared layer only
     ]);
     d.layers = [{ id: 'L', name: 'L', visible: true }];
     const s = spotlightSet(d, 'team');
@@ -254,9 +254,9 @@ describe('spotlightSet', () => {
 
   it('focal without custom layers behaves exactly like semanticRelatives', () => {
     const d = docWith([
-      ent({ id: 'dept', type: 'department' }),
-      ent({ id: 'team', type: 'team', parentId: 'dept' }),
-      ent({ id: 'other', type: 'team', customLayers: ['X'] }),
+      ent({ id: 'dept', type: 'territory' }),
+      ent({ id: 'team', type: 'territory', parentId: 'dept' }),
+      ent({ id: 'other', type: 'territory', customLayers: ['X'] }),
     ]);
     d.layers = [{ id: 'X', name: 'X', visible: true }];
     const s = spotlightSet(d, 'team');
@@ -266,14 +266,14 @@ describe('spotlightSet', () => {
   });
 
   it('returns an empty set for a missing focal id', () => {
-    const d = docWith([ent({ id: 'a', type: 'team' })]);
+    const d = docWith([ent({ id: 'a', type: 'territory' })]);
     expect(spotlightSet(d, 'ghost').size).toBe(0);
   });
 
   it('is dangling-layer-safe: groups by shared id even if no CustomLayer defines it', () => {
     const d = docWith([
-      ent({ id: 'focal', type: 'team', customLayers: ['ghostLayer'] }),
-      ent({ id: 'peer', type: 'process', customLayers: ['ghostLayer'] }),
+      ent({ id: 'focal', type: 'territory', customLayers: ['ghostLayer'] }),
+      ent({ id: 'peer', type: 'territory', customLayers: ['ghostLayer'] }),
     ]);
     // doc.layers intentionally does not define 'ghostLayer'.
     const s = spotlightSet(d, 'focal');
@@ -282,8 +282,8 @@ describe('spotlightSet', () => {
 
   it('is cycle-safe (via semanticRelatives)', () => {
     const cyc = docWith([
-      ent({ id: 'a', type: 'team', parentId: 'b' }),
-      ent({ id: 'b', type: 'team', parentId: 'a' }),
+      ent({ id: 'a', type: 'territory', parentId: 'b' }),
+      ent({ id: 'b', type: 'territory', parentId: 'a' }),
     ]);
     const s = spotlightSet(cyc, 'a');
     expect(s.has('a')).toBe(true);
@@ -295,8 +295,8 @@ describe('spotlightSet', () => {
   it('lights a focal route’s stop entities (route → stops)', () => {
     const d = docWith([
       ent({ id: 'a', type: 'user' }),
-      ent({ id: 'b', type: 'process' }),
-      ent({ id: 'unrelated', type: 'team' }),
+      ent({ id: 'b', type: 'territory' }),
+      ent({ id: 'unrelated', type: 'territory' }),
       route('r', [{ entityId: 'a' }, { entityId: 'b' }]),
     ]);
     const s = spotlightSet(d, 'r');
@@ -309,7 +309,7 @@ describe('spotlightSet', () => {
   it('lights every route that lists the focal entity as a stop (entity → routes)', () => {
     const d = docWith([
       ent({ id: 'a', type: 'user' }),
-      ent({ id: 'b', type: 'process' }),
+      ent({ id: 'b', type: 'territory' }),
       route('r1', [{ entityId: 'a' }]),
       route('r2', [{ entityId: 'b' }, { entityId: 'a' }]),
       route('r3', [{ entityId: 'b' }]),
@@ -323,7 +323,7 @@ describe('spotlightSet', () => {
   it('does not transit through routes (focal entity → route → other stop stays dark)', () => {
     const d = docWith([
       ent({ id: 'a', type: 'user' }),
-      ent({ id: 'b', type: 'process' }),
+      ent({ id: 'b', type: 'territory' }),
       route('r', [{ entityId: 'a' }, { entityId: 'b' }]),
     ]);
     // Focal a lights route r, but NOT r's other stop b.
@@ -343,7 +343,7 @@ describe('resolveRouteStops', () => {
       }),
       ent({
         id: 'f',
-        type: 'process',
+        type: 'territory',
         placement: { mode: 'free', x: 100, y: 200 },
       }),
       route('r', [{ entityId: 'g' }, { x: 7, y: 9 }, { entityId: 'f' }]),

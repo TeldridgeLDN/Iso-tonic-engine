@@ -49,7 +49,7 @@ describe('route rendering — depth band', () => {
         { x: 0, y: 0 },
         { x: 40, y: 20 },
       ]),
-      ent({ id: 'scene', type: 'process' }),
+      ent({ id: 'scene', type: 'territory' }),
     ]);
     const svg = renderSceneToString(doc);
     const scene = gIndex(svg, 'scene');
@@ -120,7 +120,7 @@ describe('route rendering — badges', () => {
     const doc = docWith([
       ent({
         id: 'g',
-        type: 'process',
+        type: 'territory',
         placement: { mode: 'grid', x: 2, y: 3, footprint: { w: 1, d: 1 } },
       }),
       route('r', [{ entityId: 'g' }, { x: 100, y: 100 }]),
@@ -147,7 +147,7 @@ describe('route rendering — spotlight dimming', () => {
         { x: 0, y: 0 },
         { x: 40, y: 20 },
       ]),
-      ent({ id: 'other', type: 'process' }),
+      ent({ id: 'other', type: 'territory' }),
     ]);
     const svg = renderSceneToString(doc, { spotlightIds: new Set(['other']) });
     expect(svg).toContain('<g data-entity-id="r" opacity="0.15">');

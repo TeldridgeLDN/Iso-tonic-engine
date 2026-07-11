@@ -6,7 +6,7 @@ import { tileToScreen } from '../src/core/iso.ts';
 function gridEnt(id: string, x: number, y: number, w = 1, d = 1): Entity {
   return {
     id,
-    type: 'department',
+    type: 'territory',
     label: id,
     placement: { mode: 'grid', x, y, footprint: { w, d } },
     asset: { symbol: 'z' },
@@ -55,7 +55,7 @@ describe('depthKey', () => {
     // key equals the equivalent unrotated-swapped placement.
     const rotated: Entity = {
       id: 'rot',
-      type: 'department',
+      type: 'territory',
       label: 'rot',
       placement: { mode: 'grid', x: 1, y: 2, footprint: { w: 4, d: 2 }, rotation: 1 },
       asset: { symbol: 'z' },
@@ -71,7 +71,7 @@ describe('depthKey', () => {
     // B: authored 1x4 at (2,0), rotation 1 → effective 4x1 → far corner (2+3)+(0) = 5.
     const b: Entity = {
       id: 'b',
-      type: 'department',
+      type: 'territory',
       label: 'b',
       placement: { mode: 'grid', x: 2, y: 0, footprint: { w: 1, d: 4 }, rotation: 1 },
       asset: { symbol: 'z' },

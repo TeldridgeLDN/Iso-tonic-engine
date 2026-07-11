@@ -9,7 +9,7 @@ import { createEmptyDocument } from '../src/core/model.ts';
 
 const regionDef: AssetDef = {
   id: 'region-organic',
-  category: 'department',
+  category: 'territory',
   footprint: { w: 4, d: 4 },
   ground: true,
   render: () => '',
@@ -31,10 +31,11 @@ const buildingDef: AssetDef = {
   ],
 };
 
-// A footprint-less zone (department-zone): size falls back to schema mins.
+// A footprint-less SYNTHETIC plate def: size falls back to schema mins. Keeps
+// a label text field to exercise the generic label-seeding machinery.
 const bareZoneDef: AssetDef = {
-  id: 'department-zone',
-  category: 'department',
+  id: 'bare-plate',
+  category: 'territory',
   ground: true,
   render: () => '',
   paramSchema: [
@@ -96,7 +97,7 @@ function docWith(...entities: Entity[]): SceneDocument {
 function region(over: Partial<Entity> = {}): Entity {
   return {
     id: 'r',
-    type: 'department',
+    type: 'territory',
     label: 'Region',
     placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 5, d: 3 } },
     asset: { symbol: 'region-organic' }, // NO params → the reported saved-map bug

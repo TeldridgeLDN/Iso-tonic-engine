@@ -119,7 +119,7 @@ describe('buildWrittenDescription', () => {
   it('excludes entities on a hidden custom layer', () => {
     const doc = docWith(
       [
-        ent({ id: 'org', type: 'organisation', label: 'Acme' }),
+        ent({ id: 'org', type: 'territory', label: 'Acme' }),
         ent({ id: 'v', type: 'user', label: 'Visible worker', parentId: 'org' }),
         ent({
           id: 'h',

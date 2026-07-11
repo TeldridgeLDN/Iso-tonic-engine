@@ -25,7 +25,7 @@ import type {
 function ent(id: string, over: Partial<Entity> = {}): Entity {
   return {
     id,
-    type: 'team',
+    type: 'territory',
     label: id,
     placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 1, d: 1 } },
     asset: { symbol: 's' },

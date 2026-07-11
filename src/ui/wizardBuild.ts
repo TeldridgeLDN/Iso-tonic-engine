@@ -10,6 +10,7 @@
 import type { Entity, EntityType, SceneDocument } from '../core/model.ts';
 import { createEmptyDocument } from '../core/model.ts';
 import { autoLayout } from '../core/layout.ts';
+import { backfillSizeParams } from '../render/docMigrate.ts';
 import { randomFigurineParams } from '../assets/figurine.ts';
 import type { ServiceDomain } from './wizardQuestions.ts';
 
@@ -24,9 +25,6 @@ export interface WizardRow {
   headcount?: number;
   /** chosen asset symbol (systems / physical infra), overrides step default. */
   asset?: string;
-  /** optional goals (zone rows): feed the entity's userGoal / orgGoal. */
-  userGoal?: string;
-  orgGoal?: string;
 }
 
 /** A step's collected value: single service info, or a list of rows. */
@@ -106,52 +104,34 @@ export function wizardBuildDocument(
   const deptIds: Map<number, string> = new Map();
   const teamIds: Map<number, string> = new Map();
 
-  // Organisations
+  // The three grouping steps (organisations / departments / teams) all produce
+  // unlabeled territory ground plates — one running label counter across them.
+  let territorySeq = 0;
+  const territory = (id: string, row: WizardRow, parentId?: string): Entity => {
+    territorySeq += 1;
+    const label = row.name || `Territory ${territorySeq}`;
+    return makeEntity(id, 'territory', label, { symbol: 'territory' }, parentId);
+  };
+
+  // Organisations → top-level territories
   answers.organisations.forEach((row, i) => {
     const id = idGen();
     orgIds.set(i, id);
-    const name = row.name || `Organisation ${i + 1}`;
-    entities.push(
-      withGoals(
-        makeEntity(id, 'organisation', name, {
-          symbol: row.asset ?? 'department-zone',
-          params: { label: name.toUpperCase() },
-        }),
-        row
-      )
-    );
+    entities.push(territory(id, row));
   });
 
-  // Departments (parent = organisation row index)
+  // Departments → territories nested in an organisation territory
   answers.departments.forEach((row, i) => {
     const id = idGen();
     deptIds.set(i, id);
-    const name = row.name || `Department ${i + 1}`;
-    entities.push(
-      withGoals(
-        makeEntity(id, 'department', name, {
-          symbol: row.asset ?? 'department-zone',
-          params: { label: name.toUpperCase() },
-        }, resolveParent(row.parentRef, orgIds)),
-        row
-      )
-    );
+    entities.push(territory(id, row, resolveParent(row.parentRef, orgIds)));
   });
 
-  // Teams (parent = department row index)
+  // Teams → territories nested in a department territory
   answers.teams.forEach((row, i) => {
     const id = idGen();
     teamIds.set(i, id);
-    const name = row.name || `Team ${i + 1}`;
-    entities.push(
-      withGoals(
-        makeEntity(id, 'team', name, {
-          symbol: row.asset ?? 'department-zone',
-          params: { label: name.toUpperCase() },
-        }, resolveParent(row.parentRef, deptIds)),
-        row
-      )
-    );
+    entities.push(territory(id, row, resolveParent(row.parentRef, deptIds)));
   });
 
   // User groups → headcount figurines each (parent = team row index)
@@ -205,7 +185,10 @@ export function wizardBuildDocument(
   });
 
   const withEntities: SceneDocument = { ...doc, entities };
-  return autoLayout(withEntities);
+  // Layout assigns footprints; the backfill then mirrors them into each grid
+  // asset's size params (territory w/d, building widthTiles/depthTiles) so the
+  // rendered plate, the resize handle and the panel inputs agree from birth.
+  return backfillSizeParams(autoLayout(withEntities));
 }
 
 // ---------------------------------------------------------------------------
@@ -214,11 +197,7 @@ export function wizardBuildDocument(
 
 function makeEntity(
   id: string,
-  // SLICE-4 BRIDGE: widened from EntityType to string — the wizard still emits
-  // the legacy zone type strings (organisation/department/team), which are no
-  // longer EntityType members. The Slice-4 wizard rework (TERRITORY_PLAN.md)
-  // will emit 'territory' and restore the strict type.
-  type: string,
+  type: EntityType,
   label: string,
   asset: { symbol: string; params?: Record<string, unknown> },
   parentId?: string
@@ -226,22 +205,13 @@ function makeEntity(
   // Placement is a throwaway origin; autoLayout replaces it entirely.
   const e: Entity = {
     id,
-    type: type as EntityType,
+    type,
     label,
     placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 1, d: 1 } },
     asset,
   };
   if (parentId) e.parentId = parentId;
   return e;
-}
-
-/** Attach optional userGoal / orgGoal (trimmed, non-empty) from a zone row. */
-function withGoals(entity: Entity, row: WizardRow): Entity {
-  const ug = row.userGoal?.trim();
-  const og = row.orgGoal?.trim();
-  if (ug) entity.userGoal = ug;
-  if (og) entity.orgGoal = og;
-  return entity;
 }
 
 /** parentRef is a stringified row index into an earlier step's id map. */
