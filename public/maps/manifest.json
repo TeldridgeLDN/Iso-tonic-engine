@@ -1,7 +1,7 @@
 {
   "v": 1,
   "kdf": {
-    "salt": "de3c89acba6c4ab01c17b20f6187aff9",
+    "salt": "8382b4b4a1594434807249e4143d8efe",
     "iterations": 200000,
     "hash": "SHA-256"
   },
