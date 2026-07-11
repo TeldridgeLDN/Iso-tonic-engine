@@ -4,5 +4,9 @@
     "d": 2
   },
   "widthPx": 128,
-  "category": "prop"
+  "category": "prop",
+  "intrinsic": {
+    "w": 512,
+    "h": 449
+  }
 }

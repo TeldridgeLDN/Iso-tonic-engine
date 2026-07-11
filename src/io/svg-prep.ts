@@ -6,6 +6,7 @@
 //     honouring nested translate() groups)
 //   - assemble a standalone, self-contained SVG document string (white bg,
 //     viewBox = bbox + margin, inlined xmlns)
+//   - inline every external <image> href as a data URI (self-contained export)
 //
 // The bbox is a linework-geometry approximation: it reads coordinates from
 // <polygon>/<polyline>/<line>/<rect>/<circle>/<path>/<text> and accumulates
@@ -338,6 +339,64 @@ function escapeXmlText(s: string): string {
  */
 export function metadataBlock(title: string, desc: string): string {
   return `<title>${escapeXmlText(title)}</title><desc>${escapeXmlText(desc)}</desc>`;
+}
+
+// ---------------------------------------------------------------------------
+// External-image inlining (export self-containment)
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve an image URL to a `data:...;base64,...` URI, or null to leave the URL
+ * untouched (a failed fetch/read must NOT abort the whole export). Injected so
+ * callers supply the mechanism: a browser `fetch` at export time, or a
+ * filesystem read under vite-node scripts.
+ */
+export type ImageResolver = (url: string) => Promise<string | null>;
+
+const IMAGE_TAG_RE = /<image\b[^>]*>/g;
+const HREF_ATTR_RE = /\b(xlink:href|href)="([^"]*)"/g;
+
+/**
+ * Rewrite every `<image>` `href` / `xlink:href` that is NOT already a `data:`
+ * URI into an inlined data URI, so the SVG is fully self-contained (untainted
+ * PNG-export canvas, working PDF). Only `<image>` elements are touched — other
+ * href-bearing elements (e.g. `<use xlink:href="#id">`) are left alone. Each
+ * distinct URL is resolved once (de-duplicated). A URL whose resolver returns
+ * null (or throws) is left in place — a degraded export beats a thrown one.
+ */
+export async function inlineImageHrefs(svg: string, resolve: ImageResolver): Promise<string> {
+  // 1. collect distinct non-data URLs referenced by <image> tags.
+  const urls = new Set<string>();
+  for (const tag of svg.match(IMAGE_TAG_RE) ?? []) {
+    HREF_ATTR_RE.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = HREF_ATTR_RE.exec(tag)) !== null) {
+      if (!m[2].startsWith('data:')) urls.add(m[2]);
+    }
+  }
+  if (urls.size === 0) return svg;
+
+  // 2. resolve each once (in parallel); drop failures.
+  const map = new Map<string, string>();
+  await Promise.all(
+    [...urls].map(async (u) => {
+      try {
+        const d = await resolve(u);
+        if (d) map.set(u, d);
+      } catch {
+        /* leave the URL in place */
+      }
+    })
+  );
+  if (map.size === 0) return svg;
+
+  // 3. substitute both href attributes within <image> tags only.
+  return svg.replace(IMAGE_TAG_RE, (tag) =>
+    tag.replace(HREF_ATTR_RE, (whole, attr: string, url: string) => {
+      const d = map.get(url);
+      return d ? `${attr}="${d}"` : whole;
+    })
+  );
 }
 
 export interface AssembleOptions {

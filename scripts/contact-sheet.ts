@@ -5,10 +5,11 @@
 //
 //   npm run contact-sheet
 
-import { writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
+import { inlineImageHrefs } from '../src/io/svg-prep.ts';
 import { listAssets, getAsset, type AssetDef } from '../src/assets/library.ts';
 import { renderFigurine, randomFigurineParams } from '../src/assets/figurine.ts';
 import { renderBuilding } from '../src/assets/building.ts';
@@ -314,6 +315,27 @@ function escapeXml(s: string): string {
 }
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const out = join(__dirname, '..', 'contact-sheet.svg');
-writeFileSync(out, build(), 'utf8');
+const REPO_ROOT = join(__dirname, '..');
+const out = join(REPO_ROOT, 'contact-sheet.svg');
+
+// Under vite-node, sprite PNGs resolve to `?url` paths (root-relative dev paths
+// like `/src/assets/sprites/x.png`), not data URIs — so the raw sheet would
+// reference files the SVG can't load stand-alone. Re-inline each from disk as a
+// base64 data URI so the written sheet is viewable on its own.
+const diskDataUri = async (url: string): Promise<string | null> => {
+  try {
+    const clean = url.split('?')[0];
+    // Prefer a repo-root-relative resolve (`/src/assets/...` is root-relative,
+    // NOT a filesystem-absolute path); fall back to the raw path if that misses.
+    const repoRel = join(REPO_ROOT, clean.replace(/^\//, ''));
+    const abs = existsSync(repoRel) ? repoRel : clean;
+    const buf = readFileSync(abs);
+    return `data:image/png;base64,${buf.toString('base64')}`;
+  } catch {
+    return null;
+  }
+};
+
+const svg = await inlineImageHrefs(build(), diskDataUri);
+writeFileSync(out, svg, 'utf8');
 console.log(`Wrote ${out}`);
