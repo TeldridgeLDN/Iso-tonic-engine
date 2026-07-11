@@ -10,7 +10,7 @@ import type { Entity, GridPlacement, SceneDocument } from '../core/model.ts';
 import { isEntityVisible, resolveRouteStops } from '../core/model.ts';
 import { sortForRender } from '../core/depth.ts';
 import { tileToScreen } from '../core/iso.ts';
-import { getAsset } from '../assets/library.ts';
+import { getAsset, isGroundAsset } from '../assets/library.ts';
 import { INK, PAPER, ACCENT } from '../assets/style.ts';
 import { circle, text } from '../assets/primitives.ts';
 import { resizeHandleScreen } from './resize.ts';
@@ -284,11 +284,6 @@ function renderResizeHandle(placement: GridPlacement): string {
     `<path d="${diamond}" fill="${ACCENT}" stroke="#fff" stroke-width="1.5"/>` +
     `</g>`
   );
-}
-
-/** Ground-plane assets (zone plates) always render beneath structures. */
-function isGroundAsset(entity: Entity): boolean {
-  return getAsset(entity.asset.symbol)?.ground === true;
 }
 
 /** Serialise the scene fragment as a string (used by tests / export prep). */

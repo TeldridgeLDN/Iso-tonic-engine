@@ -275,6 +275,15 @@ export function listAssets(): AssetDef[] {
   return ASSETS.slice();
 }
 
+/**
+ * Ground-plane assets (territory plates) underlie other entities: they render
+ * beneath structures and are exempt from grid-collision checks, so objects can
+ * be placed and moved on top of them.
+ */
+export function isGroundAsset(entity: { asset: { symbol: string } }): boolean {
+  return getAsset(entity.asset.symbol)?.ground === true;
+}
+
 export function listByCategory(category: AssetDef['category']): AssetDef[] {
   return ASSETS.filter((a) => a.category === category);
 }

@@ -9,7 +9,7 @@
 import type { Entity, Placement } from '../core/model.ts';
 import { footprintsOverlap } from '../core/model.ts';
 import { PlaceEntity, type History } from '../core/commands.ts';
-import { getAsset, type AssetDef } from '../assets/library.ts';
+import { getAsset, isGroundAsset, type AssetDef } from '../assets/library.ts';
 import { randomFigurineParams } from '../assets/figurine.ts';
 import { sizeParamKeys } from '../render/resize.ts';
 import { snapToTile, screenToTile } from '../core/iso.ts';
@@ -121,7 +121,7 @@ export class PlacementController {
     const entity = this.preview?.entity ?? this.buildEntity();
     const placement = this.placementFor(def, world.x, world.y);
     const rejected =
-      placement.mode === 'grid' && this.collidesGrid(placement, entity.id);
+      placement.mode === 'grid' && this.collidesGrid(placement, entity);
     this.preview = { entity, placement, rejected };
   }
 
@@ -174,12 +174,16 @@ export class PlacementController {
     return { mode: 'free', x: Math.round(worldX), y: Math.round(worldY) };
   }
 
-  private collidesGrid(placement: Placement, ignoreId: string): boolean {
+  private collidesGrid(placement: Placement, entity: Entity): boolean {
     if (placement.mode !== 'grid') return false;
+    // Ground plates (territories) underlie other entities — placing onto or
+    // under them is legitimate, so they are exempt from collision.
+    if (isGroundAsset(entity)) return false;
     return this.host.history.document.entities.some(
       (o) =>
-        o.id !== ignoreId &&
+        o.id !== entity.id &&
         o.placement.mode === 'grid' &&
+        !isGroundAsset(o) &&
         footprintsOverlap(placement, o.placement)
     );
   }

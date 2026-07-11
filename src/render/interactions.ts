@@ -19,7 +19,7 @@ import { MoveEntity, ResizeEntity, type History } from '../core/commands.ts';
 import type { Camera } from '../core/model.ts';
 import { panBy, screenToWorld, wheelZoom } from './camera.ts';
 import { entityOrigin } from './renderer.ts';
-import { getAsset } from '../assets/library.ts';
+import { getAsset, isGroundAsset } from '../assets/library.ts';
 import {
   isResizable,
   resizeBounds,
@@ -83,12 +83,17 @@ export function resolveGridDrop(
 
   const unchanged = placement.x === orig.x && placement.y === orig.y;
 
-  const collides = doc.entities.some(
-    (other) =>
-      other.id !== entity.id &&
-      other.placement.mode === 'grid' &&
-      footprintsOverlap(placement, other.placement)
-  );
+  // Ground plates (territories) underlie other entities — overlap with or by
+  // them is legitimate, so they are exempt from move collision.
+  const collides =
+    !isGroundAsset(entity) &&
+    doc.entities.some(
+      (other) =>
+        other.id !== entity.id &&
+        other.placement.mode === 'grid' &&
+        !isGroundAsset(other) &&
+        footprintsOverlap(placement, other.placement)
+    );
 
   return { placement, accepted: !collides, unchanged };
 }
