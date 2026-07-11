@@ -5,10 +5,9 @@ import type { Entity } from '../core/model.ts';
 import { escapeHtml } from './dom.ts';
 
 /**
- * Inner HTML for an entity's hover tooltip: label, type, optional description,
- * and — when present — the user/organisation goals as two short lines (zones /
- * whole-services). Plain-text 'User goal:' / 'Org goal:' prefixes (no emoji
- * dependency). All interpolated values are HTML-escaped.
+ * Inner HTML for an entity's hover tooltip: label, type and optional
+ * description. (The zone userGoal/orgGoal lines were removed with the
+ * territory collapse, 2026-07.) All interpolated values are HTML-escaped.
  */
 export function tooltipHtml(entity: Entity): string {
   const parts = [
@@ -18,16 +17,6 @@ export function tooltipHtml(entity: Entity): string {
   if (entity.description) {
     parts.push(
       `<span class="iso-tooltip-desc">${escapeHtml(entity.description)}</span>`
-    );
-  }
-  if (entity.userGoal) {
-    parts.push(
-      `<span class="iso-tooltip-goal">User goal: ${escapeHtml(entity.userGoal)}</span>`
-    );
-  }
-  if (entity.orgGoal) {
-    parts.push(
-      `<span class="iso-tooltip-goal">Org goal: ${escapeHtml(entity.orgGoal)}</span>`
     );
   }
   return parts.join('');

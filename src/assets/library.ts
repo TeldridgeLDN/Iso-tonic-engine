@@ -3,7 +3,7 @@
 
 import { renderFigurine } from './figurine.ts';
 import { renderBuilding } from './building.ts';
-import { renderZone, renderProcessZone, renderTerritory } from './zones.ts';
+import { renderTerritory } from './zones.ts';
 import {
   roadStraight,
   roadCorner,
@@ -22,10 +22,6 @@ import { SKIN_TONES, HAIR_COLORS } from './style.ts';
 // EntityType mirrors SCHEMA.md (duplicated: assets must not import outside assets/).
 export type EntityType =
   | 'user'
-  | 'team'
-  | 'process'
-  | 'department'
-  | 'organisation'
   | 'territory'
   | 'physical-infra'
   | 'digital-infra'
@@ -85,15 +81,9 @@ const buildingSchema: ParamField[] = [
   { key: 'signage', label: 'Signage', kind: 'text' },
 ];
 
-const zoneSchema: ParamField[] = [
-  { key: 'w', label: 'Width (tiles)', kind: 'number', min: 1, max: 12 },
-  { key: 'd', label: 'Depth (tiles)', kind: 'number', min: 1, max: 12 },
-  { key: 'label', label: 'Title', kind: 'text' },
-  { key: 'number', label: 'Plaque number', kind: 'number', min: 0, max: 999 },
-  { key: 'userGroups', label: 'User groups (comma-separated)', kind: 'text' },
-];
-
 // Territory: an unlabeled ground plate. Only w/d, resizable up to 100×100.
+// Also used by the decorative territory variants (region-organic /
+// island-coastline), which keep their own renderers but no labels.
 const territorySchema: ParamField[] = [
   { key: 'w', label: 'Width (tiles)', kind: 'number', min: 1, max: 100 },
   { key: 'd', label: 'Depth (tiles)', kind: 'number', min: 1, max: 100 },
@@ -151,7 +141,7 @@ const HAND_ASSETS: AssetDef[] = [
   },
   {
     id: 'civic',
-    category: 'organisation',
+    category: 'physical-infra', // was 'organisation' (zone kinds → territory, 2026-07)
     footprint: { w: 3, d: 2 },
     orientations: 4,
     render: buildingPreset({ widthTiles: 3, depthTiles: 2, storeys: 3, windowStyle: 'ribbon', roof: 'flat', signage: 'CIVIC' }),
@@ -205,14 +195,12 @@ const HAND_ASSETS: AssetDef[] = [
   { id: 'road-cross', category: 'prop', footprint: { w: 1, d: 1 }, ground: true, render: roadCross },
   { id: 'river-straight', category: 'prop', footprint: { w: 1, d: 1 }, ground: true, orientations: 2, render: riverStraight },
   { id: 'river-bend', category: 'prop', footprint: { w: 1, d: 1 }, ground: true, orientations: 4, render: riverBend },
-  { id: 'region-organic', category: 'department', footprint: { w: 4, d: 4 }, ground: true, render: renderRegionOrganic, paramSchema: zoneSchema },
-  { id: 'island-coastline', category: 'organisation', footprint: { w: 6, d: 6 }, ground: true, render: renderIslandCoastline, paramSchema: zoneSchema },
+  // Decorative territory variants: keep their organic renderers, share the
+  // territory schema (w/d only, unlabeled). Palette shows them under Terrain.
+  { id: 'region-organic', category: 'territory', footprint: { w: 4, d: 4 }, ground: true, render: renderRegionOrganic, paramSchema: territorySchema },
+  { id: 'island-coastline', category: 'territory', footprint: { w: 6, d: 6 }, ground: true, render: renderIslandCoastline, paramSchema: territorySchema },
 
-  // Zones
-  { id: 'department-zone', category: 'department', ground: true, render: renderZone, paramSchema: zoneSchema },
-  { id: 'process-zone', category: 'process', ground: true, render: renderProcessZone, paramSchema: zoneSchema },
-
-  // Territory (unlabeled ground plate; expand step of the zone → territory migration)
+  // Territory (unlabeled ground plate; zone kinds collapsed into it, 2026-07)
   { id: 'territory', category: 'territory', footprint: { w: 3, d: 3 }, ground: true, render: renderTerritory, paramSchema: territorySchema },
 
   // Annotation
@@ -225,10 +213,6 @@ const HAND_ASSETS: AssetDef[] = [
 // the palette groups them.
 const CATEGORIES: ReadonlySet<AssetDef['category']> = new Set<AssetDef['category']>([
   'user',
-  'team',
-  'process',
-  'department',
-  'organisation',
   'territory',
   'physical-infra',
   'digital-infra',
@@ -276,6 +260,11 @@ const ID_ALIASES: Record<string, string> = {
   'laptop-desk': 'gov-laptop',
   'wall-screen': 'gov-laptop',
   'network-mast': 'gov-laptop',
+  // Zone assets collapsed into 'territory' (2026-07). migrate() rewrites saved
+  // docs; these aliases are belt-and-braces for anything that bypasses it
+  // (e.g. the wizard until its Slice-4 rework).
+  'department-zone': 'territory',
+  'process-zone': 'territory',
 };
 
 export function getAsset(id: string): AssetDef | undefined {

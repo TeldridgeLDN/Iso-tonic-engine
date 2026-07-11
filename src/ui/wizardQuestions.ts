@@ -75,8 +75,13 @@ export interface WizardStep {
   id: StepId;
   title: string;
   prompt: string;
-  /** EntityType each produced entity gets. */
-  entityType: EntityType;
+  /**
+   * Entity type each produced entity gets.
+   * SLICE-4 BRIDGE: widened from EntityType to string — the wizard steps still
+   * declare the legacy zone types (organisation/department/team), no longer
+   * EntityType members. The Slice-4 wizard rework will emit 'territory'.
+   */
+  entityType: EntityType | string;
   /** Multi-entry (list) vs single (service title/description, or the domain). */
   multi: boolean;
   /** id of an earlier step whose entities populate a parent dropdown. */

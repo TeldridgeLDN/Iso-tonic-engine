@@ -10,7 +10,7 @@
 //   mNW–mSE  = the +x tile axis   (road-straight orientation 0)
 //   mNE–mSW  = the +y tile axis   (road-straight orientation 1)
 
-import { project, polyline, line, text, group, readOrientation, type Pt } from './primitives.ts';
+import { project, polyline, line, group, readOrientation, type Pt } from './primitives.ts';
 import { INK, PAPER, STROKE, STROKE_THIN, HALF_W, HALF_H, n } from './style.ts';
 
 // --- edge midpoints of the origin tile ----------------------------------
@@ -394,12 +394,11 @@ function closedSmoothPath(pts: Pt[]): string {
   return dstr + ' Z';
 }
 
+// Decorative territory variants carry only a footprint + optional seed; the
+// plaque/label plumbing was deleted when zone kinds collapsed into territory.
 export interface RegionParams {
   w: number;
   d: number;
-  label?: string;
-  number?: number;
-  userGroups?: string[];
   seed?: number;
 }
 
@@ -407,23 +406,8 @@ function regionNormalize(params?: Record<string, unknown>): RegionParams {
   return {
     w: num(params?.w, 4),
     d: num(params?.d, 4),
-    label: params?.label as string | undefined,
-    number: typeof params?.number === 'number' ? (params!.number as number) : toNum(params?.number),
-    userGroups: parseGroups(params?.userGroups),
     seed: typeof params?.seed === 'number' ? (params!.seed as number) : hashSeed(params),
   };
-}
-
-function toNum(v: unknown): number | undefined {
-  if (v === undefined || v === null || v === '') return undefined;
-  const x = Number(v);
-  return Number.isFinite(x) ? x : undefined;
-}
-
-function parseGroups(v: unknown): string[] | undefined {
-  if (Array.isArray(v)) return (v as unknown[]).map(String).filter(Boolean);
-  if (typeof v === 'string' && v.trim()) return v.split(',').map((s) => s.trim()).filter(Boolean);
-  return undefined;
 }
 
 /** Stable seed from footprint + label so the blob is deterministic per config. */
@@ -437,7 +421,7 @@ function hashSeed(params?: Record<string, unknown>): number {
   return h >>> 0;
 }
 
-/** region-organic (parametric footprint, category 'department'). */
+/** region-organic (parametric footprint, territory variant). Unlabeled. */
 export function renderRegionOrganic(params?: Record<string, unknown>): string {
   const p = regionNormalize(params);
   const pts = organicBlob(p.w, p.d, p.seed ?? 1);
@@ -449,16 +433,14 @@ export function renderRegionOrganic(params?: Record<string, unknown>): string {
     `<polygon points="${ha.map((q) => `${n(q.x)},${n(q.y)}`).join(' ')}" fill="#FFFFFF" fill-opacity="0" stroke="none"/>`
   );
   frags.push(`<path d="${d}" fill="none" stroke="${INK}" stroke-width="${n(STROKE)}" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="6 4"/>`);
-  // plaque block near the north (top) vertex / origin corner
-  frags.push(plaqueBlock(p.label, p.number, p.userGroups));
   return group(0, 0, frags);
 }
 
 // ========================================================================
-// ISLAND COASTLINE — large organic plate, shoreline treatment (category 'organisation')
+// ISLAND COASTLINE — large organic plate, shoreline treatment (territory variant)
 // ========================================================================
 
-/** island-coastline (parametric footprint, category 'organisation'). */
+/** island-coastline (parametric footprint, territory variant). Unlabeled. */
 export function renderIslandCoastline(params?: Record<string, unknown>): string {
   const p = regionNormalize(params);
   const seed = p.seed ?? 7;
@@ -488,65 +470,5 @@ export function renderIslandCoastline(params?: Record<string, unknown>): string 
     frags.push(line({ x: p1.x, y: p1.y }, tick, 0.7, INK));
     void base;
   }
-  // plaque near origin corner
-  frags.push(plaqueBlock(p.label, p.number, p.userGroups));
   return group(0, 0, frags);
-}
-
-// ========================================================================
-// PLAQUE BLOCK — numbered badge + title + row of user-group person glyphs.
-// Flat on the plate near the origin corner; all text UPRIGHT, ink only.
-// ========================================================================
-
-/** A tiny generic person glyph (head + shoulders outline), ~14px tall. */
-function personGlyph(cx: number, cy: number): string {
-  // cy = baseline of the shoulders; head above.
-  const headR = 2.6;
-  const headCy = cy - 8;
-  const frags: string[] = [];
-  frags.push(`<circle cx="${n(cx)}" cy="${n(headCy)}" r="${n(headR)}" fill="${PAPER}" stroke="${INK}" stroke-width="${n(STROKE_THIN)}"/>`);
-  // shoulders: shallow arc
-  frags.push(
-    `<path d="M ${n(cx - 5)} ${n(cy)} A ${n(5)} ${n(4.5)} 0 0 1 ${n(cx + 5)} ${n(cy)}" fill="${PAPER}" stroke="${INK}" stroke-width="${n(STROKE_THIN)}"/>`
-  );
-  return frags.join('');
-}
-
-export function plaqueBlock(label?: string, number?: number, userGroups?: string[]): string {
-  const frags: string[] = [];
-  // origin corner is the north vertex (0,0); drop the plaque just below-right.
-  const ox = 6;
-  const oy = -2;
-  let cursorX = ox;
-  const rowY = oy;
-  // numbered badge
-  if (number !== undefined) {
-    const r = 8;
-    frags.push(`<circle cx="${n(cursorX + r)}" cy="${n(rowY - r)}" r="${n(r)}" fill="${PAPER}" stroke="${INK}" stroke-width="${n(STROKE)}"/>`);
-    frags.push(text(cursorX + r, rowY - r + 3.2, String(number), { size: 9, weight: 'bold', fill: INK, anchor: 'middle' }));
-    cursorX += r * 2 + 4;
-  }
-  // title
-  if (label) {
-    frags.push(text(cursorX, rowY - 6, label, { size: 9, weight: 'bold', fill: INK, anchor: 'start' }));
-  }
-  // user-group icons row beneath the badge/title. Columns are spaced by the
-  // MEASURED width of each label (approx char-count × font-size × 0.6) plus a
-  // fixed gutter, so long group names no longer collide with their neighbours.
-  if (userGroups && userGroups.length) {
-    const gy = rowY + 18; // below the title line
-    const labelSize = 5.5;
-    const glyphMin = 16; // a person glyph needs ~16px even for a short label
-    const gutter = 8; // breathing space between adjacent columns
-    let gx = ox + 8;
-    userGroups.forEach((gLabel) => {
-      const labelW = Math.max(glyphMin, gLabel.length * labelSize * 0.6);
-      const cx = gx + labelW / 2; // centre the glyph + centred label in the column
-      frags.push(personGlyph(cx, gy));
-      // tiny label beneath, upright, centred under its glyph
-      frags.push(text(cx, gy + 8, gLabel, { size: labelSize, fill: INK, anchor: 'middle' }));
-      gx += labelW + gutter;
-    });
-  }
-  return frags.join('');
 }

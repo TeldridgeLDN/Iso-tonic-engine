@@ -18,10 +18,6 @@ import { el, button, eyeToggle, clear } from './dom.ts';
 
 const TYPE_LABELS: Record<EntityType, string> = {
   user: 'People',
-  team: 'Teams',
-  process: 'Processes',
-  department: 'Departments',
-  organisation: 'Organisations',
   territory: 'Territories',
   'physical-infra': 'Physical infra',
   'digital-infra': 'Digital infra',

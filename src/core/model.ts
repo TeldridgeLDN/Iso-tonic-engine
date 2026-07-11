@@ -11,12 +11,10 @@ export { effectiveFootprint };
 // Types (mirror docs/SCHEMA.md exactly)
 // ---------------------------------------------------------------------------
 
+// The old zone kinds (team/process/department/organisation) were collapsed
+// into the single 'territory' type (2026-07); migrate() rewrites them on load.
 export type EntityType =
   | 'user'
-  | 'team'
-  | 'process'
-  | 'department'
-  | 'organisation'
   | 'territory'
   | 'physical-infra'
   | 'digital-infra'
@@ -93,8 +91,6 @@ export interface Entity {
   placement: Placement;
   asset: AssetRef;
   anchorEntityId?: string;
-  userGoal?: string; // zones/whole-services: what the user is trying to do
-  orgGoal?: string; // zones/whole-services: what the organisation wants
   // Unknown fields must be preserved (forward compatibility).
   [key: string]: unknown;
 }
@@ -127,10 +123,6 @@ export interface SceneDocument {
 
 export const ALL_ENTITY_TYPES: readonly EntityType[] = [
   'user',
-  'team',
-  'process',
-  'department',
-  'organisation',
   'territory',
   'physical-infra',
   'digital-infra',

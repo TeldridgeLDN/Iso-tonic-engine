@@ -93,8 +93,13 @@ export function autoLayout(doc: SceneDocument): SceneDocument {
   let plateCursorX = 0;
   const plateRowY = 0;
 
-  const isType = (e: Entity, ...types: Entity['type'][]): boolean =>
-    types.includes(e.type);
+  // SLICE-4 BRIDGE: the wizard still emits the legacy zone type strings
+  // (organisation/department/team/process), which are no longer EntityType
+  // members. Compare as plain strings until the wizard is reworked to emit
+  // territories (TERRITORY_PLAN.md Slice 4) — behavior is unchanged.
+  const typeOf = (e: Entity): string => e.type;
+  const isType = (e: Entity, ...types: string[]): boolean =>
+    types.includes(typeOf(e));
 
   const isTopLevel = (e: Entity): boolean =>
     !e.parentId || byId(doc, e.parentId) === undefined;
@@ -105,7 +110,7 @@ export function autoLayout(doc: SceneDocument): SceneDocument {
     if (!isType(e, 'organisation', 'department')) continue;
     if (!isTopLevel(e)) continue;
 
-    const size = e.type === 'organisation' ? ORG_PLATE : DEPT_PLATE;
+    const size = typeOf(e) === 'organisation' ? ORG_PLATE : DEPT_PLATE;
     const g = grid(plateCursorX, plateRowY, size.w, size.d);
     working.get(id)!.placement = g;
     grids.set(id, g);
@@ -117,7 +122,7 @@ export function autoLayout(doc: SceneDocument): SceneDocument {
   const childPlateCursor = new Map<string, number>(); // parentId → next local x offset
   for (const id of idsSorted) {
     const e = working.get(id)!.entity;
-    if (e.type !== 'department') continue;
+    if (typeOf(e) !== 'department') continue;
     if (isTopLevel(e)) continue; // already placed in pass 1
 
     const parentGrid = e.parentId ? grids.get(e.parentId) : undefined;
@@ -146,7 +151,7 @@ export function autoLayout(doc: SceneDocument): SceneDocument {
   const teamCursor = new Map<string, { col: number; row: number }>();
   for (const id of idsSorted) {
     const e = working.get(id)!.entity;
-    if (e.type !== 'team') continue;
+    if (typeOf(e) !== 'team') continue;
 
     const parentGrid = e.parentId ? grids.get(e.parentId) : undefined;
     if (!parentGrid) {
@@ -213,7 +218,7 @@ export function autoLayout(doc: SceneDocument): SceneDocument {
   let looseProcessX = 0;
   for (const id of idsSorted) {
     const e = working.get(id)!.entity;
-    if (e.type !== 'process') continue;
+    if (typeOf(e) !== 'process') continue;
     const g = grid(looseProcessX, looseProcessY, PROCESS_ZONE.w, PROCESS_ZONE.d);
     working.get(id)!.placement = g;
     looseProcessX += PROCESS_ZONE.w + PLATE_PAD;

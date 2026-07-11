@@ -214,7 +214,11 @@ export function wizardBuildDocument(
 
 function makeEntity(
   id: string,
-  type: EntityType,
+  // SLICE-4 BRIDGE: widened from EntityType to string — the wizard still emits
+  // the legacy zone type strings (organisation/department/team), which are no
+  // longer EntityType members. The Slice-4 wizard rework (TERRITORY_PLAN.md)
+  // will emit 'territory' and restore the strict type.
+  type: string,
   label: string,
   asset: { symbol: string; params?: Record<string, unknown> },
   parentId?: string
@@ -222,7 +226,7 @@ function makeEntity(
   // Placement is a throwaway origin; autoLayout replaces it entirely.
   const e: Entity = {
     id,
-    type,
+    type: type as EntityType,
     label,
     placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 1, d: 1 } },
     asset,

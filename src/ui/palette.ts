@@ -15,7 +15,7 @@ import { el, clear } from './dom.ts';
  * Terrain & streetscape section: roads, rivers, organic regions, coastlines,
  * plus the small street furniture that reads as landscape. These ids are pulled
  * OUT of their normal category group into a dedicated section (region-organic /
- * island-coastline are department/organisation category but belong here).
+ * island-coastline are territory category but belong here).
  */
 const TERRAIN_IDS = new Set<string>([
   'road-straight',
@@ -36,9 +36,6 @@ const TERRAIN_IDS = new Set<string>([
 // section is injected separately (see renderList) since it spans categories.
 const GROUPS: { category: AssetDef['category']; label: string }[] = [
   { category: 'territory', label: 'Territory' },
-  { category: 'organisation', label: 'Organisations' },
-  { category: 'department', label: 'Departments' },
-  { category: 'process', label: 'Processes' },
   { category: 'user', label: 'People' },
   { category: 'digital-infra', label: 'Digital infrastructure' },
   { category: 'physical-infra', label: 'Physical infrastructure' },

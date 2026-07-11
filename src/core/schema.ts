@@ -328,14 +328,6 @@ function validateEntity(
     validateRoute(ent, i, errors);
   }
 
-  // userGoal / orgGoal (optional strings)
-  if (ent.userGoal !== undefined && typeof ent.userGoal !== 'string') {
-    errors.push(`entities[${i}].userGoal must be a string`);
-  }
-  if (ent.orgGoal !== undefined && typeof ent.orgGoal !== 'string') {
-    errors.push(`entities[${i}].orgGoal must be a string`);
-  }
-
   // placement
   validatePlacement(ent.placement, i, errors);
 }

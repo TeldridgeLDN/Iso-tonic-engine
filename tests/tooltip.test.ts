@@ -5,10 +5,10 @@ import type { Entity } from '../src/core/model.ts';
 function ent(over: Partial<Entity>): Entity {
   return {
     id: 'e',
-    type: 'process',
+    type: 'territory',
     label: 'Order → cup',
     placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 1, d: 1 } },
-    asset: { symbol: 'process-zone' },
+    asset: { symbol: 'territory' },
     ...over,
   } as Entity;
 }
@@ -20,20 +20,18 @@ describe('tooltipHtml', () => {
     expect(html).toContain('iso-tooltip-type');
   });
 
-  it('includes goal lines only when present', () => {
-    const none = tooltipHtml(ent({}));
-    expect(none).not.toContain('User goal:');
-    expect(none).not.toContain('Org goal:');
-
-    const both = tooltipHtml(
+  // Goal lines were removed with the territory contract: even a legacy entity
+  // still carrying stray goal fields must render no goal lines.
+  it('renders no goal lines, even for legacy goal fields', () => {
+    const html = tooltipHtml(
       ent({ userGoal: 'Coffee in under 3 minutes', orgGoal: 'Keep the line moving' })
     );
-    expect(both).toContain('User goal: Coffee in under 3 minutes');
-    expect(both).toContain('Org goal: Keep the line moving');
+    expect(html).not.toContain('User goal:');
+    expect(html).not.toContain('Org goal:');
   });
 
-  it('escapes goal text', () => {
-    const html = tooltipHtml(ent({ userGoal: '<script>' }));
+  it('escapes description text', () => {
+    const html = tooltipHtml(ent({ description: '<script>' }));
     expect(html).toContain('&lt;script&gt;');
     expect(html).not.toContain('<script>');
   });

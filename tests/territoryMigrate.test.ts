@@ -5,6 +5,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { validateDocument, migrate } from '../src/core/schema.ts';
+import { ALL_ENTITY_TYPES } from '../src/core/model.ts';
 import { buildDemoScene } from '../src/demo.ts';
 
 function baseDoc(over: Record<string, unknown> = {}): Record<string, unknown> {
@@ -245,6 +246,85 @@ describe('migrate — old zone entities become territories', () => {
         asset: { symbol: 'territory', params: { w: 3, d: 3 } },
       },
     ]);
+  });
+});
+
+describe('contract — old zone types removed from the schema surface', () => {
+  it('ALL_ENTITY_TYPES no longer lists the old zone kinds, and lists territory', () => {
+    expect(ALL_ENTITY_TYPES).toContain('territory');
+    for (const old of ['department', 'process', 'organisation', 'team']) {
+      expect(ALL_ENTITY_TYPES).not.toContain(old);
+    }
+  });
+
+  it('an old-format doc (all four zone kinds, goals, old visibility keys) still loads end-to-end', () => {
+    // The load-order guarantee: validateDocument migrates FIRST, so old types
+    // never reach the (now-contracted) type validation.
+    const res = validateDocument(
+      baseDoc({
+        typeLayerVisibility: { department: true, team: false, user: true },
+        entities: [
+          {
+            id: 'o',
+            type: 'organisation',
+            label: 'Org',
+            orgGoal: 'stay solvent',
+            placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 9, d: 9 } },
+            asset: { symbol: 'department-zone', params: { w: 9, d: 9, label: 'ORG', number: 1 } },
+          },
+          {
+            id: 'd',
+            type: 'department',
+            label: 'Dept',
+            parentId: 'o',
+            placement: { mode: 'grid', x: 1, y: 1, footprint: { w: 3, d: 3 } },
+            asset: { symbol: 'department-zone', params: { w: 3, d: 3, label: 'DEPT' } },
+          },
+          {
+            id: 'p',
+            type: 'process',
+            label: 'Proc',
+            parentId: 'o',
+            placement: { mode: 'grid', x: 5, y: 1, footprint: { w: 3, d: 2 } },
+            asset: { symbol: 'process-zone', params: { w: 3, d: 2, label: 'PROC' } },
+          },
+          {
+            id: 't',
+            type: 'team',
+            label: 'Team',
+            userGoal: 'ship it',
+            placement: { mode: 'grid', x: 1, y: 5, footprint: { w: 2, d: 2 } },
+            asset: { symbol: 'department-zone', params: { w: 2, d: 2, label: 'TEAM' } },
+          },
+        ],
+      })
+    );
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    for (const e of res.doc.entities) expect(e.type).toBe('territory');
+    expect(res.doc.typeLayerVisibility).toEqual({ user: true, territory: true });
+  });
+
+  it('an old zone type on a non-zone asset cannot smuggle through validation', () => {
+    // Migration rewrites by TYPE (not just by symbol), so even a hand-written
+    // doc using an old type string comes out as territory — old types are
+    // unrepresentable in an accepted document.
+    const res = validateDocument(
+      baseDoc({
+        entities: [
+          {
+            id: 'x',
+            type: 'department',
+            label: 'X',
+            placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 2, d: 2 } },
+            asset: { symbol: 'building', params: { widthTiles: 2, depthTiles: 2 } },
+          },
+        ],
+      })
+    );
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.doc.entities[0].type).toBe('territory');
   });
 });
 

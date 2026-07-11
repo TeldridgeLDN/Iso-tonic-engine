@@ -60,11 +60,9 @@ describe('validateDocument — accept', () => {
     expect(validateDocument(doc).ok).toBe(true);
   });
 
-  it('accepts userGoal/orgGoal string fields', () => {
-    const doc = baseDoc();
-    doc.entities = [entity({ id: 'a', userGoal: 'apply for a grant', orgGoal: 'process claims' })];
-    expect(validateDocument(doc).ok).toBe(true);
-  });
+  // (The userGoal/orgGoal accept test was deleted with the territory contract:
+  // the fields are gone from the model; stray ones survive only as preserved
+  // unknown fields.)
 });
 
 describe('validateDocument — reject', () => {
@@ -166,16 +164,8 @@ describe('validateDocument — reject', () => {
     if (!res.ok) expect(res.errors.some((e) => e.includes('rotation'))).toBe(true);
   });
 
-  it('rejects non-string userGoal / orgGoal', () => {
-    const doc = baseDoc();
-    // type 'user': the old zone types (team/department/…) are migrated to
-    // territory with goals STRIPPED before validation, so a zone-typed fixture
-    // would no longer exercise this rule.
-    doc.entities = [entity({ id: 'a', type: 'user', userGoal: 42 })];
-    const res = validateDocument(doc);
-    expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.errors.some((e) => e.includes('userGoal'))).toBe(true);
-  });
+  // (The non-string userGoal reject test was deleted with the territory
+  // contract: goal validation was removed along with the model fields.)
 });
 
 describe('validateDocument — warnings not errors', () => {
