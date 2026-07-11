@@ -11,6 +11,7 @@ import {
   SetLayerVisibility,
   SetTypeLayerVisibility,
   UpsertFigurinePreset,
+  CompoundCommand,
   History,
 } from '../src/core/commands.ts';
 import type { Command } from '../src/core/commands.ts';
@@ -207,6 +208,61 @@ describe('every command inverts', () => {
 
   it('UpsertFigurinePreset (overwrite existing)', () => {
     assertInverts(new UpsertFigurinePreset('p0', figParams('tone-9')), fixture());
+  });
+});
+
+describe('CompoundCommand (batch delete)', () => {
+  it('applies children in order and inverts to restore all (round-trip)', () => {
+    const d = fixture(); // entities: a, b
+    const cmd = new CompoundCommand('Delete 2 entities', [
+      new DeleteEntity('a'),
+      new DeleteEntity('b'),
+    ]);
+    const applied = cmd.apply(d);
+    expect(applied.entities).toEqual([]);
+    expect(cmd.invert(applied)).toEqual(d);
+  });
+
+  it('inverts children in REVERSE of apply order', () => {
+    const order: string[] = [];
+    const track = (name: string): Command => ({
+      label: name,
+      apply: (doc) => {
+        order.push(`apply:${name}`);
+        return doc;
+      },
+      invert: (doc) => {
+        order.push(`invert:${name}`);
+        return doc;
+      },
+    });
+    const cmd = new CompoundCommand('batch', [track('x'), track('y'), track('z')]);
+    const applied = cmd.apply(fixture());
+    cmd.invert(applied);
+    expect(order).toEqual([
+      'apply:x',
+      'apply:y',
+      'apply:z',
+      'invert:z',
+      'invert:y',
+      'invert:x',
+    ]);
+  });
+
+  it('is a single history step (one undo restores every entity)', () => {
+    const start = fixture();
+    const h = new History(start);
+    h.execute(
+      new CompoundCommand('Delete 2 entities', [
+        new DeleteEntity('a'),
+        new DeleteEntity('b'),
+      ])
+    );
+    expect(h.document.entities).toEqual([]);
+    expect(h.canUndo()).toBe(true);
+    h.undo();
+    expect(h.canUndo()).toBe(false); // exactly one undoable step
+    expect(h.document).toEqual(start);
   });
 });
 

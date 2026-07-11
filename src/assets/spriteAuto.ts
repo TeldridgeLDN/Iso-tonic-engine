@@ -4,12 +4,15 @@
 //
 // MECHANISM
 // ---------
-// `import.meta.glob('./sprites/*.png', { query: '?inline', import: 'default',
-// eager: true })` asks vite to inline every matching PNG as a base64
-// `data:image/png;base64,...` string at build time. VERIFIED to resolve
-// identically in BOTH `vite build` (app) and `vite-node scripts/contact-sheet`
-// — the same mechanism spriteAsset already relies on, just enumerated instead
-// of hand-imported. Sidecar JSON overrides come from a parallel `*.json` glob.
+// `import.meta.glob('./sprites/*.png', { query: '?url', import: 'default',
+// eager: true })` asks vite for every matching PNG's URL — a hashed asset URL
+// in `vite build` (the bytes ship as a separate cacheable file, NOT base64 in
+// the JS bundle), and a root-relative dev path like `/src/assets/sprites/x.png`
+// under `vite-node`. The billboard aspect ratio comes from each sprite's sidecar
+// `intrinsic` (backfilled by prep-sprite), so no image bytes are decoded here.
+// Scripts that need a viewable stand-alone SVG (contact-sheet, preview-doc)
+// re-inline these URLs from disk; export re-inlines them via fetch. Sidecar JSON
+// overrides come from a parallel `*.json` glob.
 //
 // All the decision logic (id derivation, sidecar merge, orientation grouping,
 // collision policy) lives in spriteAutoCore.ts as pure functions so it is
@@ -18,9 +21,10 @@
 import { spriteAsset, type AssetLike } from './sprite.ts';
 import { groupSprites, type DiscoveredSprite } from './spriteAutoCore.ts';
 
-// Eager, inlined PNGs: key = './sprites/<file>.png', value = data URI string.
+// Eager PNG URLs: key = './sprites/<file>.png', value = hashed asset URL string
+// (dev/vite-node: a root-relative `/src/assets/sprites/<file>.png` path).
 const PNG_GLOB = import.meta.glob('./sprites/*.png', {
-  query: '?inline',
+  query: '?url',
   import: 'default',
   eager: true,
 }) as Record<string, string>;
@@ -49,6 +53,7 @@ function toEntry(s: DiscoveredSprite): AutoSpriteEntry {
     footprint: s.footprint,
     widthPx: s.widthPx,
     anchor: s.anchor,
+    intrinsic: s.intrinsic,
     image,
   });
   return {

@@ -1,0 +1,12 @@
+{
+  "footprint": {
+    "w": 1,
+    "d": 1
+  },
+  "widthPx": 64,
+  "category": "digital-infra",
+  "intrinsic": {
+    "w": 311,
+    "h": 512
+  }
+}

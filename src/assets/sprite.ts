@@ -21,18 +21,27 @@
 // filename, optional sidecar JSON + `.oN.png` variants). This function is the
 // underlying machinery both the auto path and any rare hand-registration use.
 //
-// DATA URI MECHANISM
-// ------------------
-// The PNG is imported with vite's `?inline` suffix, which resolves to a
-// `data:image/png;base64,...` string in BOTH the app build and vite-node
-// (verified: `import png from './x.png?inline'` yields the same data URI in
-// `vite build` and in `vite-node scripts/contact-sheet.ts`). No filesystem read
-// at runtime, no separate asset file to ship — the bytes live in the bundle.
+// IMAGE SOURCE MECHANISM
+// ----------------------
+// A sprite's `image` is just whatever string it was handed — the rendered
+// `<image href>` carries it verbatim. Two shapes flow in:
+//   • a hashed asset URL (spriteAuto imports each PNG with vite's `?url`, so the
+//     bytes ship as a separate cacheable file, not base64 inside the JS bundle);
+//   • a `data:image/png;base64,...` URI (rare hand-registration, or the
+//     export-time inline pass that re-embeds URLs for self-contained SVG/PNG/PDF).
+// Billboard height comes from `opts.intrinsic` (the base PNG's pixel size, kept
+// in the sprite's sidecar JSON). Only when that is absent AND the image is a
+// data URI do we fall back to decoding the IHDR via pngIntrinsicSize; otherwise
+// aspect defaults to 1:1. No synchronous byte read is needed for URL sprites.
 
 import { project } from './primitives.ts';
 import { n } from './style.ts';
 
-/** A PNG image provided as a base64 `data:image/png;base64,...` URI. */
+/**
+ * A PNG image reference: either a hashed asset URL (the normal auto-discovery
+ * path) or a base64 `data:image/png;base64,...` URI (hand-registration / the
+ * export-time inline pass). Emitted verbatim into the `<image href>`.
+ */
 export type PngDataUri = string;
 
 export interface SpriteOptions {
@@ -40,10 +49,17 @@ export interface SpriteOptions {
   footprint: { w: number; d: number };
   /**
    * Display width of the billboard in screen px. Height is derived from the
-   * PNG's intrinsic aspect ratio (read from the PNG header at module init), so
-   * the image is never distorted.
+   * PNG's intrinsic aspect ratio (see `intrinsic` below), so the image is never
+   * distorted.
    */
   widthPx: number;
+  /**
+   * Base image's intrinsic pixel size, used to derive the billboard height
+   * (heightPx = widthPx / (w/h)) without decoding image bytes. Supplied from the
+   * sprite's sidecar JSON. When omitted, height falls back to a data-URI IHDR
+   * read (if `image` is a data URI) or a 1:1 aspect.
+   */
+  intrinsic?: { w: number; h: number };
   /**
    * Anchor offset (screen px) of the sprite's BASELINE relative to the ground
    * point it stands on. The baseline is the bottom-centre of the billboard.
@@ -121,12 +137,13 @@ export function spriteAsset(opts: SpriteOptions): AssetLike {
   const anchor = opts.anchor ?? { dx: 0, dy: 0 };
   const hasVariants = Array.isArray(opts.image) && opts.image.filter(Boolean).length > 1;
 
-  // Aspect ratio from the base image (index 0). Fall back to square if the PNG
-  // header can't be read, so a bad asset degrades to a visible square rather
-  // than a zero-height (invisible) image.
+  // Aspect ratio from the base image (index 0). Prefer the sidecar-supplied
+  // intrinsic size (no byte read); else, for a hand-registered DATA URI, decode
+  // its IHDR; else fall back to square so a bad asset degrades to a visible
+  // square rather than a zero-height (invisible) image.
   const base = variantFor(opts.image, 0);
-  const size = pngIntrinsicSize(base);
-  const aspect = size ? size.w / size.h : 1;
+  const size = opts.intrinsic ?? (base.startsWith('data:') ? pngIntrinsicSize(base) : null);
+  const aspect = size && size.h > 0 ? size.w / size.h : 1;
   const heightPx = widthPx / aspect;
 
   const render = (params?: Record<string, unknown>): string => {

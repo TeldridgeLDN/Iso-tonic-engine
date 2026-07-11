@@ -15,6 +15,9 @@ export interface SpriteSidecar {
   widthPx?: number;
   category?: string;
   anchor?: { dx: number; dy: number };
+  /** Base PNG's intrinsic pixel size, backfilled by prep-sprite. Drives the
+   *  billboard aspect ratio without decoding image bytes at runtime. */
+  intrinsic?: { w: number; h: number };
 }
 
 /** One discovered sprite, resolved from its base PNG (+ variants + sidecar). */
@@ -24,6 +27,8 @@ export interface DiscoveredSprite {
   footprint: { w: number; d: number };
   widthPx: number;
   anchor: { dx: number; dy: number };
+  /** Base image's intrinsic pixel size (from the sidecar), if known. */
+  intrinsic?: { w: number; h: number };
   /** Base image (orientation 0) plus optional o1..o3 variants (sparse ok). */
   images: [string, (string | undefined)?, (string | undefined)?, (string | undefined)?];
 }
@@ -107,6 +112,14 @@ export function coerceSidecar(raw: unknown): SpriteSidecar {
     const dy = (an as Record<string, unknown>).dy;
     if (typeof dx === 'number' && typeof dy === 'number') out.anchor = { dx, dy };
   }
+  const intr = o.intrinsic;
+  if (intr && typeof intr === 'object') {
+    const w = (intr as Record<string, unknown>).w;
+    const h = (intr as Record<string, unknown>).h;
+    if (typeof w === 'number' && typeof h === 'number' && w > 0 && h > 0) {
+      out.intrinsic = { w, h };
+    }
+  }
   return out;
 }
 
@@ -129,6 +142,7 @@ export function resolveSprite(
     footprint: sc.footprint ?? { ...SPRITE_DEFAULTS.footprint },
     widthPx: sc.widthPx ?? SPRITE_DEFAULTS.widthPx,
     anchor: sc.anchor ?? { ...SPRITE_DEFAULTS.anchor },
+    intrinsic: sc.intrinsic,
     images: [base, rawImages[1], rawImages[2], rawImages[3]],
   };
 }

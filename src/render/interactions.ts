@@ -18,6 +18,7 @@ import { screenToTile, snapToTile, tileToScreen } from '../core/iso.ts';
 import { MoveEntity, ResizeEntity, type History } from '../core/commands.ts';
 import type { Camera } from '../core/model.ts';
 import { panBy, screenToWorld, wheelZoom } from './camera.ts';
+import { entityOrigin } from './renderer.ts';
 import { getAsset } from '../assets/library.ts';
 import {
   isResizable,
@@ -125,6 +126,29 @@ export function resolveResize(
   };
 }
 
+/**
+ * The ids of entities whose projected origin falls inside a world-space marquee
+ * rectangle (shift+drag on empty background). Corners may be given in any order;
+ * the rectangle is normalised. Ground entities (roads, rivers) are included so a
+ * marquee can gather them for batch deletion (the driving use case).
+ */
+export function entitiesInMarquee(
+  doc: SceneDocument,
+  cornerA: { x: number; y: number },
+  cornerB: { x: number; y: number }
+): string[] {
+  const minX = Math.min(cornerA.x, cornerB.x);
+  const maxX = Math.max(cornerA.x, cornerB.x);
+  const minY = Math.min(cornerA.y, cornerB.y);
+  const maxY = Math.max(cornerA.y, cornerB.y);
+  const hits: string[] = [];
+  for (const e of doc.entities) {
+    const o = entityOrigin(e);
+    if (o.x >= minX && o.x <= maxX && o.y >= minY && o.y <= maxY) hits.push(e.id);
+  }
+  return hits;
+}
+
 /** World-px position a FREE entity should move to for a given pointer delta. */
 export function resolveFreeDrop(
   entity: Entity,
@@ -145,8 +169,11 @@ export function resolveFreeDrop(
 
 export type Mode = 'edit' | 'present';
 
-/** Canvas interaction tool (edit mode): move/select entities, or resize zones. */
-export type Tool = 'select' | 'resize';
+/**
+ * Canvas interaction tool (edit mode): move/select entities, resize zones, or
+ * draw a process-flow route by clicking successive stops.
+ */
+export type Tool = 'select' | 'resize' | 'route';
 
 export interface InteractionHost {
   history: History;
@@ -155,12 +182,25 @@ export interface InteractionHost {
   panCamera(next: Camera): void;
   /** Called when selection changes (edit mode). id or undefined to clear. */
   onSelect(id: string | undefined): void;
+  /** Shift+click: toggle one entity in/out of the multi-selection. */
+  onToggleSelect?(id: string): void;
+  /** Shift+drag marquee committed: these ids become the selection (edit mode). */
+  onMarquee?(ids: string[]): void;
+  /** Live marquee overlay in WORLD coords while shift-dragging (undefined clears). */
+  setMarquee?(rect: { x: number; y: number; w: number; h: number } | undefined): void;
   /** Current selection id (edit mode) — used to resolve the resize handle's owner. */
   getSelectedId?(): string | undefined;
   /** When true, dragging a resizable zone resizes it without needing Shift. */
   getResizeArmed?(): boolean;
   /** The active canvas tool (edit mode). Defaults to 'select' when absent. */
   getTool?(): Tool;
+  /**
+   * Route tool: a click added a stop — `entityId` is the hit entity (if any),
+   * `world` the pointer's world-px position. The host decides entity vs free.
+   */
+  onRoutePoint?(entityId: string | undefined, world: { x: number; y: number }): void;
+  /** Route tool: finish the in-progress route (double-click). */
+  onRouteFinish?(): void;
   /** Called when the spotlight focus changes (present mode). */
   onSpotlight(id: string | undefined): void;
   /** Called on hover change so the app can re-render + position the tooltip. */
@@ -181,16 +221,31 @@ type DragState =
       moved: boolean;
     }
   | { kind: 'resize'; entityId: string; candidate?: GridPlacement }
+  | { kind: 'marquee'; worldStart: { x: number; y: number } }
   | {
       kind: 'pending';
       startX: number;
       startY: number;
       entityId?: string;
       /**
-       * Resize-tool only: the zone this press would resize once it becomes a
-       * drag. A plain click still selects `entityId`; a drag resizes this.
+       * Resize-tool / shift / armed only: the zone this press would resize once
+       * it becomes a drag. A plain click still selects `entityId`; a drag
+       * resizes this.
        */
       resizeTargetId?: string;
+      /**
+       * Whether Shift was held on press: a shift+CLICK toggles selection, a
+       * shift+drag over empty background starts a marquee. Disambiguated at the
+       * DRAG_THRESHOLD so shift+drag over a resizable zone still resizes.
+       */
+      shift?: boolean;
+      /**
+       * The press landed on a ground:true entity (road, river, zone plate,
+       * island). Real maps are usually covered edge-to-edge by ground plates,
+       * so shift+drag from ground also starts a marquee — otherwise there is
+       * nowhere to start one. Zone resizing stays on the dedicated resize tool.
+       */
+      groundPress?: boolean;
     };
 
 const DRAG_THRESHOLD = 3; // px before a press becomes a drag
@@ -208,6 +263,7 @@ export class InteractionController {
     svg.addEventListener('pointermove', this.onPointerMove);
     svg.addEventListener('pointerup', this.onPointerUp);
     svg.addEventListener('pointerleave', this.onPointerLeave);
+    svg.addEventListener('dblclick', this.onDoubleClick);
     svg.addEventListener('wheel', this.onWheel, { passive: false });
   }
 
@@ -223,6 +279,12 @@ export class InteractionController {
       this.host.requestRender();
       return true;
     }
+    if (this.drag.kind === 'marquee') {
+      this.drag = { kind: 'none' };
+      this.host.setMarquee?.(undefined);
+      this.host.requestRender();
+      return true;
+    }
     return false;
   }
 
@@ -231,6 +293,7 @@ export class InteractionController {
     this.svg.removeEventListener('pointermove', this.onPointerMove);
     this.svg.removeEventListener('pointerup', this.onPointerUp);
     this.svg.removeEventListener('pointerleave', this.onPointerLeave);
+    this.svg.removeEventListener('dblclick', this.onDoubleClick);
     this.svg.removeEventListener('wheel', this.onWheel);
   }
 
@@ -311,9 +374,10 @@ export class InteractionController {
     }
 
     // Shift+drag (or the panel's armed "Adjust size" toggle) resizes instead
-    // of moving: the zone under the pointer if it's resizable, else the
-    // current selection. Selecting it first keeps the handle/ghost
-    // affordances consistent with a handle-initiated resize.
+    // of moving: the zone under the pointer if it's resizable, else the current
+    // selection. This is DEFERRED through a pending press so that Shift+CLICK
+    // (no drag) can toggle multi-selection, and Shift+drag over empty
+    // background can start a marquee — both disambiguated at DRAG_THRESHOLD.
     if (
       this.host.getMode() === 'edit' &&
       (evt.shiftKey || this.host.getResizeArmed?.() === true)
@@ -321,16 +385,26 @@ export class InteractionController {
       const doc = this.host.history.document;
       const pressedId = this.entityIdAt(evt);
       const pressed = pressedId ? byId(doc, pressedId) : undefined;
+      const groundPress = pressed ? getAsset(pressed.asset.symbol)?.ground === true : false;
+      // A shift press on a ground plate goes to the marquee, not resize —
+      // resize via shift stays for non-ground presses; the resize tool always
+      // works regardless.
       const selectedId = this.host.getSelectedId?.();
       const selected = selectedId ? byId(doc, selectedId) : undefined;
-      const target = [pressed, selected].find(
-        (e) => e && isResizable(e, getAsset(e.asset.symbol))
-      );
-      if (target) {
-        this.host.onSelect(target.id);
-        this.drag = { kind: 'resize', entityId: target.id };
-        return;
-      }
+      const target = evt.shiftKey && groundPress
+        ? undefined
+        : [pressed, selected].find((e) => e && isResizable(e, getAsset(e.asset.symbol)));
+      const lp = this.localPoint(evt);
+      this.drag = {
+        kind: 'pending',
+        startX: lp.x,
+        startY: lp.y,
+        entityId: pressedId,
+        resizeTargetId: target?.id,
+        shift: evt.shiftKey,
+        groundPress,
+      };
+      return;
     }
 
     const entityId = this.entityIdAt(evt);
@@ -365,6 +439,40 @@ export class InteractionController {
           } else {
             this.drag = { kind: 'none' };
           }
+          return;
+        }
+        // Route tool: a drag pans the canvas (so long routes can be drawn while
+        // scrolling); clicks add stops. Never move/select an entity here.
+        if (this.host.getMode() === 'edit' && this.host.getTool?.() === 'route') {
+          this.drag = { kind: 'pan', lastX: lp.x, lastY: lp.y };
+          return;
+        }
+        // Shift / armed drag over a resizable zone → resize it (select tool).
+        if (this.host.getMode() === 'edit' && this.drag.resizeTargetId) {
+          const targetId = this.drag.resizeTargetId;
+          this.host.onSelect(targetId);
+          this.drag = { kind: 'resize', entityId: targetId };
+          this.updateResizeGhost(evt);
+          return;
+        }
+        // Shift+drag on empty background OR on a ground plate → marquee
+        // selection rectangle (real maps are covered by ground, see pending
+        // state doc).
+        if (
+          this.host.getMode() === 'edit' &&
+          this.drag.shift === true &&
+          (this.drag.entityId === undefined || this.drag.groundPress === true)
+        ) {
+          const { w, h } = this.viewportSize();
+          const worldStart = screenToWorld(
+            this.drag.startX,
+            this.drag.startY,
+            this.host.getCamera(),
+            w,
+            h
+          );
+          this.drag = { kind: 'marquee', worldStart };
+          this.updateMarquee(evt);
           return;
         }
         const editable =
@@ -402,8 +510,25 @@ export class InteractionController {
       return;
     }
 
+    if (this.drag.kind === 'marquee') {
+      this.updateMarquee(evt);
+      return;
+    }
+
     // Not dragging: hover tracking.
     this.updateHover(evt);
+  }
+
+  private updateMarquee(evt: PointerEvent): void {
+    if (this.drag.kind !== 'marquee') return;
+    const s = this.drag.worldStart;
+    const now = this.worldPoint(evt);
+    this.host.setMarquee?.({
+      x: Math.min(s.x, now.x),
+      y: Math.min(s.y, now.y),
+      w: Math.abs(now.x - s.x),
+      h: Math.abs(now.y - s.y),
+    });
   }
 
   private updateResizeGhost(evt: PointerEvent): void {
@@ -446,9 +571,22 @@ export class InteractionController {
       this.commitDrag(evt);
     } else if (this.drag.kind === 'resize') {
       this.commitResize(evt);
+    } else if (this.drag.kind === 'marquee') {
+      const ids = entitiesInMarquee(
+        this.host.history.document,
+        this.drag.worldStart,
+        this.worldPoint(evt)
+      );
+      this.host.setMarquee?.(undefined);
+      this.host.onMarquee?.(ids);
     } else if (this.drag.kind === 'pending') {
-      // A click (no drag past threshold).
-      this.handleClick(this.drag.entityId);
+      // Route tool: a click adds a stop (entity hit or free point). Otherwise a
+      // click selects (edit) / spotlights (present).
+      if (this.host.getMode() === 'edit' && this.host.getTool?.() === 'route') {
+        this.host.onRoutePoint?.(this.drag.entityId, this.worldPoint(evt));
+      } else {
+        this.handleClick(this.drag.entityId, this.drag.shift === true);
+      }
     }
     // pan drag: nothing to commit.
 
@@ -498,9 +636,15 @@ export class InteractionController {
     );
   }
 
-  private handleClick(entityId: string | undefined): void {
+  private handleClick(entityId: string | undefined, shift: boolean): void {
     if (this.host.getMode() === 'edit') {
-      this.host.onSelect(entityId);
+      // Shift+click an entity toggles it in/out of the multi-selection; a plain
+      // click (or shift on empty background) replaces / clears the selection.
+      if (shift && entityId && this.host.onToggleSelect) {
+        this.host.onToggleSelect(entityId);
+      } else {
+        this.host.onSelect(entityId);
+      }
     } else {
       // Present mode: click entity ⇒ spotlight; click bg ⇒ release.
       this.host.onSpotlight(entityId);
@@ -519,6 +663,13 @@ export class InteractionController {
   private onPointerLeave = (): void => {
     this.hoverId = undefined;
     this.host.onHover(undefined, 0, 0);
+  };
+
+  /** Double-click finishes an in-progress route (route tool, edit mode). */
+  private onDoubleClick = (): void => {
+    if (this.host.getMode() === 'edit' && this.host.getTool?.() === 'route') {
+      this.host.onRouteFinish?.();
+    }
   };
 
   private onWheel = (evt: WheelEvent): void => {

@@ -1,5 +1,12 @@
 {
   "widthPx": 62,
-  "footprint": { "w": 1, "d": 1 },
-  "category": "prop"
+  "footprint": {
+    "w": 1,
+    "d": 1
+  },
+  "category": "prop",
+  "intrinsic": {
+    "w": 238,
+    "h": 512
+  }
 }

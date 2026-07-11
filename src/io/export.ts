@@ -10,8 +10,10 @@ import {
   assembleSvgWithMeta,
   computeBBox,
   exportDimensions,
+  inlineImageHrefs,
   stripEditorOnly,
   type BBox,
+  type ImageResolver,
 } from './svg-prep.ts';
 import { buildWrittenDescription } from './description.ts';
 import {
@@ -82,11 +84,60 @@ function fileBase(doc: SceneDocument): string {
 }
 
 // ---------------------------------------------------------------------------
+// Self-containment: inline external <image> URLs at export time
+// ---------------------------------------------------------------------------
+
+/**
+ * Default resolver: fetch a same-origin asset URL and read it back as a base64
+ * data URI. Returns null on any failure so the export degrades (keeps the URL)
+ * rather than throwing.
+ */
+const fetchImageAsDataUri: ImageResolver = async (url) => {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await blobToDataUri(blob);
+  } catch {
+    return null;
+  }
+};
+
+function blobToDataUri(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (): void => resolve(String(reader.result));
+    reader.onerror = (): void => reject(new Error('export: failed to read image blob'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Build the export SVG and inline any external <image> hrefs so the returned
+ * document is fully self-contained. `resolve` is injectable for testing; it
+ * defaults to a same-origin fetch. Every export path (SVG/PNG/PDF) funnels the
+ * consumed SVG string through here.
+ */
+async function buildSelfContainedSvg(
+  doc: SceneDocument,
+  opts: ExportOptions,
+  resolve: ImageResolver
+): Promise<Prepared> {
+  const prepared = buildExportSvg(doc, opts);
+  const svg = await inlineImageHrefs(prepared.svg, resolve);
+  return { ...prepared, svg };
+}
+
+// ---------------------------------------------------------------------------
 // SVG export
 // ---------------------------------------------------------------------------
 
-export function exportSVG(doc: SceneDocument, opts: ExportOptions = {}): void {
-  const { svg } = buildExportSvg(doc, opts);
+export async function exportSVG(
+  doc: SceneDocument,
+  opts: ExportOptions = {},
+  resolve: ImageResolver = fetchImageAsDataUri
+): Promise<void> {
+  const { svg } = await buildSelfContainedSvg(doc, opts, resolve);
   downloadBlob(svg, `${fileBase(doc)}.svg`, 'image/svg+xml');
 }
 
@@ -111,9 +162,10 @@ export function exportDescription(doc: SceneDocument): void {
 export async function exportPNG(
   doc: SceneDocument,
   scale: 1 | 2 | 4,
-  opts: ExportOptions = {}
+  opts: ExportOptions = {},
+  resolve: ImageResolver = fetchImageAsDataUri
 ): Promise<void> {
-  const { svg, width, height } = buildExportSvg(doc, opts);
+  const { svg, width, height } = await buildSelfContainedSvg(doc, opts, resolve);
   const img = await svgToImage(svg);
 
   const canvas = document.createElement('canvas');
@@ -165,12 +217,13 @@ function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
  */
 export async function exportPDF(
   doc: SceneDocument,
-  opts: ExportOptions = {}
+  opts: ExportOptions = {},
+  resolve: ImageResolver = fetchImageAsDataUri
 ): Promise<void> {
   const { jsPDF } = await import('jspdf');
   const { svg2pdf } = await import('svg2pdf.js');
 
-  const { svg, width, height } = buildExportSvg(doc, opts);
+  const { svg, width, height } = await buildSelfContainedSvg(doc, opts, resolve);
   const w = Math.max(1, width);
   const h = Math.max(1, height);
 

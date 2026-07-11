@@ -9,6 +9,12 @@
 import type { Tool } from '../render/interactions.ts';
 import { el } from './dom.ts';
 
+// Dashed rightwards arrow (U+21E2) — a dashed-path glyph in the same unicode
+// icon style as the ▲ / ⤡ buttons. (The brief asked for an SVG glyph; the two
+// existing tool buttons are unicode text glyphs set via textContent, so a
+// matching glyph keeps the pill visually uniform — see the report.)
+const ROUTE_ICON = '⇢';
+
 export interface CanvasToolbarHooks {
   getTool(): Tool;
   setTool(tool: Tool): void;
@@ -47,7 +53,16 @@ export function buildCanvasToolbar(hooks: CanvasToolbarHooks): CanvasToolbarHand
   );
   resizeBtn.setAttribute('data-tool', 'resize');
 
-  const pill = el('div', { class: 'iso-canvas-toolpill' }, [selectBtn, resizeBtn]);
+  const routeBtn = toolButton(ROUTE_ICON, 'Draw route', 'C', () =>
+    hooks.setTool('route')
+  );
+  routeBtn.setAttribute('data-tool', 'route');
+
+  const pill = el('div', { class: 'iso-canvas-toolpill' }, [
+    selectBtn,
+    resizeBtn,
+    routeBtn,
+  ]);
   const hint = el('div', { class: 'iso-canvas-hint' }) as HTMLDivElement;
   hint.hidden = true;
 
@@ -60,6 +75,8 @@ export function buildCanvasToolbar(hooks: CanvasToolbarHooks): CanvasToolbarHand
       selectBtn.setAttribute('aria-pressed', String(tool === 'select'));
       resizeBtn.classList.toggle('is-active', tool === 'resize');
       resizeBtn.setAttribute('aria-pressed', String(tool === 'resize'));
+      routeBtn.classList.toggle('is-active', tool === 'route');
+      routeBtn.setAttribute('aria-pressed', String(tool === 'route'));
       if (hintText) {
         hint.textContent = hintText;
         hint.hidden = false;

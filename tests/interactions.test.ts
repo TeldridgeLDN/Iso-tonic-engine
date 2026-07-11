@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   resolveGridDrop,
   resolveFreeDrop,
+  entitiesInMarquee,
 } from '../src/render/interactions.ts';
 import { tileToScreen } from '../src/core/iso.ts';
 import type { Entity, SceneDocument } from '../src/core/model.ts';
@@ -74,6 +75,41 @@ describe('resolveGridDrop', () => {
     // shift a by +2,+2 → occupies (2,2)-(3,3): (3,3) collides with b
     const res = resolveGridDrop(a, worldAtTile(0, 0), worldAtTile(2, 2), doc);
     expect(res.accepted).toBe(false);
+  });
+});
+
+describe('entitiesInMarquee', () => {
+  it('selects entities whose projected origin falls inside the rectangle', () => {
+    const a = gridEntity('a', 0, 0); // origin (0,0)
+    const b = gridEntity('b', 2, 1); // origin (32,48)
+    const c = gridEntity('c', 10, 10); // origin (0,320) — far away
+    const doc = docWith(a, b, c);
+    const ids = entitiesInMarquee(doc, { x: -1, y: -1 }, { x: 33, y: 49 });
+    expect(ids.sort()).toEqual(['a', 'b']);
+  });
+
+  it('normalises corner order (rectangle given bottom-right → top-left)', () => {
+    const a = gridEntity('a', 0, 0);
+    const doc = docWith(a);
+    expect(entitiesInMarquee(doc, { x: 10, y: 10 }, { x: -10, y: -10 })).toEqual(['a']);
+  });
+
+  it('includes ground entities (roads/rivers) so they can be batch-selected', () => {
+    const road = gridEntity('road-1', 1, 1); // origin (0,32)
+    const doc = docWith(road);
+    const o = worldAtTile(1, 1);
+    const ids = entitiesInMarquee(
+      doc,
+      { x: o.x - 1, y: o.y - 1 },
+      { x: o.x + 1, y: o.y + 1 }
+    );
+    expect(ids).toEqual(['road-1']);
+  });
+
+  it('returns [] when nothing falls inside', () => {
+    const a = gridEntity('a', 0, 0);
+    const doc = docWith(a);
+    expect(entitiesInMarquee(doc, { x: 100, y: 100 }, { x: 200, y: 200 })).toEqual([]);
   });
 });
 

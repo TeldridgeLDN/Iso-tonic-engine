@@ -15,9 +15,11 @@ import {
   AssignLayers,
   DeleteEntity,
   ResizeEntity,
+  CompoundCommand,
 } from '../core/commands.ts';
 import { getAsset, type ParamField } from '../assets/library.ts';
 import { isResizable, resizeBounds, sizeParamKeys } from '../render/resize.ts';
+import { removeLastStop, routeStopCount } from './routeBuilder.ts';
 import type { AppContext } from './context.ts';
 import { el, button, field, clear } from './dom.ts';
 import { FigurineEditor, isFigurine } from './figurineEditor.ts';
@@ -34,6 +36,7 @@ const TYPE_LABELS: Record<string, string> = {
   'physical-infra': 'Physical infra',
   'digital-infra': 'Digital infra',
   annotation: 'Annotation',
+  route: 'Journey',
 };
 
 export class PropertiesPanel {
@@ -63,6 +66,14 @@ export class PropertiesPanel {
 
   private render(): void {
     clear(this.body);
+
+    // Multi-selection: show a count + a single batch-delete button (one confirm).
+    const ids = this.ctx.selectedIds();
+    if (ids.length > 1) {
+      this.body.append(this.batchDelete(ids));
+      return;
+    }
+
     const entity = this.selected();
     if (!entity) {
       this.body.append(
@@ -74,6 +85,10 @@ export class PropertiesPanel {
     this.body.append(this.typeBadge(entity));
     this.body.append(this.labelField(entity));
     this.body.append(this.descriptionField(entity));
+
+    // Route stops: read-only count + "Remove last stop" (routes only).
+    if (entity.type === 'route') this.body.append(this.routeStopsField(entity));
+
     this.body.append(this.userGoalField(entity));
     this.body.append(this.orgGoalField(entity));
     this.body.append(this.parentField(entity));
@@ -132,6 +147,38 @@ export class PropertiesPanel {
       }
     });
     return field('Description', ta);
+  }
+
+  /**
+   * Route-only block: a read-only "N stops" line and a "Remove last stop"
+   * button. Removal reuses UpdateEntityProps (shallow params patch replacing the
+   * stops array) so it is a single undoable step. Disabled at one stop — a route
+   * must keep at least one stop to stay schema-valid.
+   */
+  private routeStopsField(entity: Entity): HTMLElement {
+    const params = (entity.asset.params ?? {}) as Record<string, unknown>;
+    const stops = Array.isArray(params.stops) ? params.stops : [];
+    const count = routeStopCount(entity);
+
+    const wrap = el('div', { class: 'iso-route-stops' });
+    wrap.append(
+      el('div', {
+        class: 'iso-route-count',
+        text: `${count} stop${count === 1 ? '' : 's'}`,
+      })
+    );
+    const btn = button(
+      'Remove last stop',
+      () => {
+        this.ctx.history.execute(
+          new UpdateEntityProps(entity.id, { params: { stops: removeLastStop(stops) } })
+        );
+      },
+      'iso-btn iso-btn-sm'
+    );
+    btn.disabled = count <= 1;
+    wrap.append(btn);
+    return field('Stops', wrap);
   }
 
   private userGoalField(entity: Entity): HTMLElement {
@@ -373,6 +420,34 @@ export class PropertiesPanel {
       new ResizeEntity({ entityId: entity.id, from, to, paramKeys })
     );
     return true;
+  }
+
+  /**
+   * Multi-selection view: "N entities selected" + a single batch-delete button
+   * that removes them all as ONE undo step (CompoundCommand) behind ONE confirm.
+   */
+  private batchDelete(ids: string[]): HTMLElement {
+    const wrap = el('div', { class: 'iso-props-multi' });
+    wrap.append(
+      el('p', { class: 'iso-empty', text: `${ids.length} entities selected` })
+    );
+    const btn = button(
+      `Delete ${ids.length} entities`,
+      () => {
+        const ok = window.confirm(`Delete ${ids.length} entities?`);
+        if (!ok) return;
+        this.ctx.history.execute(
+          new CompoundCommand(
+            `Delete ${ids.length} entities`,
+            ids.map((id) => new DeleteEntity(id))
+          )
+        );
+        this.ctx.select(undefined);
+      },
+      'iso-btn iso-btn-danger'
+    );
+    wrap.append(el('div', { class: 'iso-props-delete' }, [btn]));
+    return wrap;
   }
 
   private deleteButton(entity: Entity): HTMLElement {

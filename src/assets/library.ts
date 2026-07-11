@@ -8,13 +8,13 @@ import {
   roadStraight,
   roadCorner,
   roadT,
+  roadCross,
   riverStraight,
   riverBend,
   renderRegionOrganic,
   renderIslandCoastline,
 } from './terrain.ts';
 import { renderCallout } from './callout.ts';
-import { serverRack, desktopWorkstation, laptopDesk, wallScreen, networkMast } from './symbols/digital.ts';
 import { shopFront, cornerShop } from './symbols/highstreet.ts';
 import { discoverSprites } from './spriteAuto.ts';
 import { SKIN_TONES, HAIR_COLORS } from './style.ts';
@@ -160,13 +160,11 @@ const HAND_ASSETS: AssetDef[] = [
   // flat-colour sprite in sprites/market-stall.png (same id, auto-discovered).
 
   // Digital infra
-  { id: 'server-rack', category: 'digital-infra', footprint: { w: 1, d: 1 }, render: serverRack },
-  { id: 'desktop-workstation', category: 'digital-infra', footprint: { w: 1, d: 1 }, orientations: 2, render: desktopWorkstation },
-  { id: 'laptop-desk', category: 'digital-infra', footprint: { w: 1, d: 1 }, orientations: 2, render: laptopDesk },
-  { id: 'wall-screen', category: 'digital-infra', footprint: { w: 2, d: 1 }, orientations: 2, render: wallScreen },
+  // 'server-rack', 'desktop-workstation', 'laptop-desk', 'wall-screen' and
+  // 'network-mast' vectors removed 2026-07-10 — superseded by the gov-laptop
+  // sprite (all five ids alias to it so saved documents still load).
   // 'telephone' vector retired 2026-07-10 — replaced by the Variant-B flat-colour
   // sprite in sprites/telephone.png (same id, auto-discovered).
-  { id: 'network-mast', category: 'digital-infra', footprint: { w: 1, d: 1 }, render: networkMast },
 
   // Vehicles (physical infra)
   // 'van' vector retired 2026-07-10 — replaced by the Variant-B flat-colour
@@ -197,6 +195,7 @@ const HAND_ASSETS: AssetDef[] = [
   { id: 'road-straight', category: 'prop', footprint: { w: 1, d: 1 }, ground: true, orientations: 2, render: roadStraight },
   { id: 'road-corner', category: 'prop', footprint: { w: 1, d: 1 }, ground: true, orientations: 4, render: roadCorner },
   { id: 'road-t', category: 'prop', footprint: { w: 1, d: 1 }, ground: true, orientations: 4, render: roadT },
+  { id: 'road-cross', category: 'prop', footprint: { w: 1, d: 1 }, ground: true, render: roadCross },
   { id: 'river-straight', category: 'prop', footprint: { w: 1, d: 1 }, ground: true, orientations: 2, render: riverStraight },
   { id: 'river-bend', category: 'prop', footprint: { w: 1, d: 1 }, ground: true, orientations: 4, render: riverBend },
   { id: 'region-organic', category: 'department', footprint: { w: 4, d: 4 }, ground: true, render: renderRegionOrganic, paramSchema: zoneSchema },
@@ -257,6 +256,15 @@ const ID_ALIASES: Record<string, string> = {
   'sprite-demo': 'demo-crate',
   // Vector house replaced by the auto-discovered PNG sprite (2026-07-06).
   'house': 'house-small',
+  // "Intelligent prompt" is deliberately the same concept as the AI agent
+  // (2026-07-10 government-service concept set) — one sprite, two names.
+  'intelligent-prompt': 'ai-agent',
+  // Legacy digital-infra vectors removed 2026-07-10, superseded by gov-laptop.
+  'server-rack': 'gov-laptop',
+  'desktop-workstation': 'gov-laptop',
+  'laptop-desk': 'gov-laptop',
+  'wall-screen': 'gov-laptop',
+  'network-mast': 'gov-laptop',
 };
 
 export function getAsset(id: string): AssetDef | undefined {

@@ -1,7 +1,7 @@
 // Scene document types (per docs/SCHEMA.md v1) + factory & query helpers.
 // Pure TS, no DOM.
 
-import { footprintTiles, effectiveFootprint } from './iso.ts';
+import { footprintTiles, effectiveFootprint, tileToScreen } from './iso.ts';
 
 // Re-exported so callers get the rotation helper from the model surface
 // (per docs/SCHEMA.md: "always derive via core effectiveFootprint()").
@@ -19,7 +19,8 @@ export type EntityType =
   | 'organisation'
   | 'physical-infra'
   | 'digital-infra'
-  | 'annotation';
+  | 'annotation'
+  | 'route';
 
 export interface CustomLayer {
   id: string;
@@ -74,6 +75,13 @@ export interface CalloutParams {
   leader?: boolean;
 }
 
+/** A single stop on a route: either an existing entity, or a free world-px point. */
+export type RouteStop = { entityId: string } | { x: number; y: number };
+
+export interface RouteParams {
+  stops: RouteStop[];
+}
+
 export interface Entity {
   id: string;
   type: EntityType;
@@ -125,6 +133,7 @@ export const ALL_ENTITY_TYPES: readonly EntityType[] = [
   'physical-infra',
   'digital-infra',
   'annotation',
+  'route',
 ];
 
 // ---------------------------------------------------------------------------
@@ -158,6 +167,59 @@ export function byId(doc: SceneDocument, id: string): Entity | undefined {
 /** Direct children of an entity (entities whose parentId === id). */
 export function childrenOf(doc: SceneDocument, id: string): Entity[] {
   return doc.entities.filter((e) => e.parentId === id);
+}
+
+/**
+ * Extract a route entity's stops array as authored, or [] if the params or
+ * stops are absent/malformed. Does not validate individual stop shapes — that
+ * is the validator's job; callers guard per-stop.
+ */
+function routeStops(route: Entity): unknown[] {
+  const params = route.asset.params;
+  if (!isObjectRecord(params)) return [];
+  const stops = params.stops;
+  return Array.isArray(stops) ? stops : [];
+}
+
+function isObjectRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/**
+ * Resolve a route's stops to world-pixel points, in authored order.
+ *
+ * - A free stop ({x, y}) resolves to its own coords.
+ * - An entity stop ({entityId}) resolves to that entity's placement position:
+ *   grid placements project through tileToScreen(x, y) (matching the renderer's
+ *   entityOrigin); free placements use their x/y directly. The resolved point
+ *   carries the entityId.
+ * - Entity stops whose id is dangling (no such entity) or refers to another
+ *   route are SKIPPED. Order of the surviving stops is preserved.
+ */
+export function resolveRouteStops(
+  doc: SceneDocument,
+  route: Entity
+): Array<{ x: number; y: number; entityId?: string }> {
+  const out: Array<{ x: number; y: number; entityId?: string }> = [];
+  for (const stop of routeStops(route)) {
+    if (!isObjectRecord(stop)) continue;
+    if (typeof stop.entityId === 'string') {
+      const target = byId(doc, stop.entityId);
+      if (!target || target.type === 'route') continue; // dangling or route → skip
+      const p = target.placement;
+      const pt =
+        p.mode === 'grid' ? tileToScreen(p.x, p.y) : { x: p.x, y: p.y };
+      out.push({ x: pt.x, y: pt.y, entityId: stop.entityId });
+    } else if (
+      typeof stop.x === 'number' &&
+      Number.isFinite(stop.x) &&
+      typeof stop.y === 'number' &&
+      Number.isFinite(stop.y)
+    ) {
+      out.push({ x: stop.x, y: stop.y });
+    }
+  }
+  return out;
 }
 
 /**
@@ -245,6 +307,12 @@ export function semanticRelatives(doc: SceneDocument, id: string): Entity[] {
  * Cycle-safe (via semanticRelatives) and dangling-layer-safe (a layer id the
  * focal entity carries but that no CustomLayer defines still groups entities
  * that literally share that id string — grouping is purely by shared id).
+ *
+ * Route linkage is also lit: a focal route additionally lights every entity it
+ * has as a stop; a focal non-route additionally lights every route that lists
+ * it as a stop. This is a single hop — there is no further transitivity through
+ * routes (a lit route does not then light its other stops).
+ *
  * Returns an empty set for a missing focal id.
  */
 export function spotlightSet(doc: SceneDocument, entityId: string): Set<string> {
@@ -261,6 +329,25 @@ export function spotlightSet(doc: SceneDocument, entityId: string): Set<string> 
       if (e.customLayers?.some((lid) => focalLayerSet.has(lid))) {
         ids.add(e.id);
       }
+    }
+  }
+
+  // Route linkage (single hop, no transitivity through routes).
+  if (focal.type === 'route') {
+    for (const stop of routeStops(focal)) {
+      if (isObjectRecord(stop) && typeof stop.entityId === 'string') {
+        const target = byId(doc, stop.entityId);
+        if (target && target.type !== 'route') ids.add(target.id);
+      }
+    }
+  } else {
+    for (const e of doc.entities) {
+      if (e.type !== 'route') continue;
+      const linksFocal = routeStops(e).some(
+        (stop) =>
+          isObjectRecord(stop) && stop.entityId === focal.id
+      );
+      if (linksFocal) ids.add(e.id);
     }
   }
 

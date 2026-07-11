@@ -38,34 +38,95 @@ function num(v: unknown, dflt: number): number {
 }
 
 // The two road entry/exit pairs (by axis). Orientation selects which pair.
-// A "straight" connects one pair; corners/T pick from all four midpoints.
-const ROAD_HALF = 16; // half the carriageway width in px (~32px overall — tree-canopy scale)
+// A "straight" connects one pair; corners/T/cross pick from all four midpoints.
+//
+// SEAM CONTRACT: every shape crosses a tile edge exactly at that edge's
+// midpoint, ROAD_HALF wide, with its spine tangent PARALLEL to the axis
+// through that midpoint. Straights, corners, T-junctions and crossroads all
+// share this contract, so any combination composes SimCity-style.
+// Half the carriageway width in px (20px overall). Must be comfortably less
+// than the ~14.3px spine-to-vertex clearance of the tile diamond, or a single
+// band swallows the whole tile and junction kerb corners degenerate to points
+// outside it (the flaw in the pre-2026-07 16px roads).
+const ROAD_HALF = 10;
 
-/** Two parallel kerb lines + faint centre dashes between endpoints a..b. */
+// Flat-colour terrain palette (muted, matching the Variant-B sprite look).
+const ASPHALT = '#9A9DA2';
+const ROAD_DASH = '#F2EFE8';
+const WATER = '#8FB6C4';
+const BANK = '#5E8799';
+
+// ordered ring of midpoints, clockwise: mNE, mSE, mSW, mNW
+const ring = [mNE, mSE, mSW, mNW];
+// Inward axis direction at each ring midpoint (unit vector into the tile).
+const inward: Pt[] = ring.map((m, i) => unit(sub(ring[(i + 2) % 4], m)));
+
+function sub(a: Pt, b: Pt): Pt {
+  return { x: a.x - b.x, y: a.y - b.y };
+}
+
+function unit(v: Pt): Pt {
+  const L = Math.hypot(v.x, v.y) || 1;
+  return { x: v.x / L, y: v.y / L };
+}
+
+function add(a: Pt, v: Pt, k = 1): Pt {
+  return { x: a.x + v.x * k, y: a.y + v.y * k };
+}
+
+function dot(a: Pt, b: Pt): number {
+  return a.x * b.x + a.y * b.y;
+}
+
+/** Intersection of lines p + t·r and q + s·w (assumed non-parallel). */
+function lineIntersect(p: Pt, r: Pt, q: Pt, w: Pt): Pt {
+  const denom = r.x * w.y - r.y * w.x;
+  const t = ((q.x - p.x) * w.y - (q.y - p.y) * w.x) / denom;
+  return { x: p.x + r.x * t, y: p.y + r.y * t };
+}
+
+function polygonFill(pts: Pt[], fill: string): string {
+  return `<polygon points="${pts.map((p) => `${n(p.x)},${n(p.y)}`).join(' ')}" fill="${fill}" stroke="none"/>`;
+}
+
+/** Carriageway fill polygon between endpoints a..b. */
+function bandFill(a: Pt, b: Pt, half: number, fill: string): string {
+  const pv = perp(a, b);
+  return polygonFill(
+    [add(a, pv, half), add(b, pv, half), add(b, pv, -half), add(a, pv, -half)],
+    fill
+  );
+}
+
+/** Centre-line dashes between a..b over given t ranges (pairs of [t0,t1]). */
+function centreDashes(a: Pt, b: Pt, ranges: Array<[number, number]>): string {
+  return ranges.map(([t0, t1]) => line(lerp(a, b, t0), lerp(a, b, t1), 1.2, ROAD_DASH)).join('');
+}
+
+const FULL_DASHES: Array<[number, number]> = [
+  [0.0625, 0.15], [0.3125, 0.4], [0.5625, 0.65], [0.8125, 0.9],
+];
+
+/** Full straight band: fill + two kerbs + dashes. */
 function roadBand(a: Pt, b: Pt, dashes = true): string {
   const pv = perp(a, b);
-  const a1 = { x: a.x + pv.x * ROAD_HALF, y: a.y + pv.y * ROAD_HALF };
-  const b1 = { x: b.x + pv.x * ROAD_HALF, y: b.y + pv.y * ROAD_HALF };
-  const a2 = { x: a.x - pv.x * ROAD_HALF, y: a.y - pv.y * ROAD_HALF };
-  const b2 = { x: b.x - pv.x * ROAD_HALF, y: b.y - pv.y * ROAD_HALF };
-  const frags: string[] = [];
-  frags.push(line(a1, b1, STROKE, INK));
-  frags.push(line(a2, b2, STROKE, INK));
-  if (dashes) {
-    // faint centre-line dashes
-    const steps = 4;
-    for (let i = 0; i < steps; i++) {
-      const t0 = (i + 0.25) / steps;
-      const t1 = (i + 0.6) / steps;
-      frags.push(line(lerp(a, b, t0), lerp(a, b, t1), 0.6, INK));
-    }
-  }
+  const frags: string[] = [bandFill(a, b, ROAD_HALF, ASPHALT)];
+  frags.push(line(add(a, pv, ROAD_HALF), add(b, pv, ROAD_HALF), STROKE, INK));
+  frags.push(line(add(a, pv, -ROAD_HALF), add(b, pv, -ROAD_HALF), STROKE, INK));
+  if (dashes) frags.push(centreDashes(a, b, FULL_DASHES));
   return frags.join('');
 }
 
-/** Curved road/river band via a quadratic through a control point. */
-function curvedBand(a: Pt, ctrl: Pt, b: Pt, half: number, stroke: number, wobble = false, seed = 1): string {
-  // Sample the quad, offset each side by `half` along the local normal.
+// --- curved spine sampling (shared by road corner and rivers) ------------
+
+interface Offsets {
+  spine: Pt[];
+  left: Pt[];
+  right: Pt[];
+}
+
+/** Sampled quadratic spine with ±half offsets (optional deterministic wobble). */
+function quadOffsets(a: Pt, ctrl: Pt, b: Pt, half: number, wobble = false, seed = 1): Offsets {
   const N = 14;
   const spine: Pt[] = [];
   for (let i = 0; i <= N; i++) {
@@ -74,7 +135,9 @@ function curvedBand(a: Pt, ctrl: Pt, b: Pt, half: number, stroke: number, wobble
     let x = mt * mt * a.x + 2 * mt * t * ctrl.x + t * t * b.x;
     let y = mt * mt * a.y + 2 * mt * t * ctrl.y + t * t * b.y;
     if (wobble && i > 0 && i < N) {
-      const w = Math.sin(t * Math.PI * 3 + seed) * 1.3;
+      // tapered by sin(πt) so the wobble dies at the endpoints — the spine
+      // leaves each edge exactly on-axis and seams stay kink-free
+      const w = Math.sin(t * Math.PI * 3 + seed) * 1.3 * Math.sin(Math.PI * t);
       const d = perpQuad(a, ctrl, b, t);
       x += d.x * w;
       y += d.y * w;
@@ -85,10 +148,10 @@ function curvedBand(a: Pt, ctrl: Pt, b: Pt, half: number, stroke: number, wobble
   const right: Pt[] = [];
   for (let i = 0; i <= N; i++) {
     const d = perpQuad(a, ctrl, b, i / N);
-    left.push({ x: spine[i].x + d.x * half, y: spine[i].y + d.y * half });
-    right.push({ x: spine[i].x - d.x * half, y: spine[i].y - d.y * half });
+    left.push(add(spine[i], d, half));
+    right.push(add(spine[i], d, -half));
   }
-  return polyline(left, stroke, INK) + polyline(right, stroke, INK);
+  return { spine, left, right };
 }
 
 /** Tangent-normal of a quadratic bezier at t. */
@@ -97,6 +160,43 @@ function perpQuad(a: Pt, c: Pt, b: Pt, t: number): Pt {
   const dy = 2 * (1 - t) * (c.y - a.y) + 2 * t * (b.y - c.y);
   const L = Math.hypot(dx, dy) || 1;
   return { x: -dy / L, y: dx / L };
+}
+
+/** Sampled cubic spine with ±half offsets. End tangents are a→c1 and c2→b. */
+function cubicOffsets(a: Pt, c1: Pt, c2: Pt, b: Pt, half: number): Offsets {
+  const N = 14;
+  const spine: Pt[] = [];
+  const left: Pt[] = [];
+  const right: Pt[] = [];
+  for (let i = 0; i <= N; i++) {
+    const t = i / N;
+    const mt = 1 - t;
+    spine.push({
+      x: mt ** 3 * a.x + 3 * mt * mt * t * c1.x + 3 * mt * t * t * c2.x + t ** 3 * b.x,
+      y: mt ** 3 * a.y + 3 * mt * mt * t * c1.y + 3 * mt * t * t * c2.y + t ** 3 * b.y,
+    });
+    const dx = 3 * mt * mt * (c1.x - a.x) + 6 * mt * t * (c2.x - c1.x) + 3 * t * t * (b.x - c2.x);
+    const dy = 3 * mt * mt * (c1.y - a.y) + 6 * mt * t * (c2.y - c1.y) + 3 * t * t * (b.y - c2.y);
+    const L = Math.hypot(dx, dy) || 1;
+    const d = { x: -dy / L, y: dx / L };
+    left.push(add(spine[i], d, half));
+    right.push(add(spine[i], d, -half));
+  }
+  return { spine, left, right };
+}
+
+function offsetsFill(o: Offsets, fill: string): string {
+  return polygonFill([...o.left, ...o.right.slice().reverse()], fill);
+}
+
+/** Dashes along a sampled spine over the same t ranges as centreDashes. */
+function spineDashes(spine: Pt[], ranges: Array<[number, number]>, color = ROAD_DASH): string {
+  const at = (t: number): Pt => {
+    const f = t * (spine.length - 1);
+    const i = Math.min(Math.floor(f), spine.length - 2);
+    return lerp(spine[i], spine[i + 1], f - i);
+  };
+  return ranges.map(([t0, t1]) => line(at(t0), at(t1), 1.2, color)).join('');
 }
 
 // ========================================================================
@@ -112,90 +212,135 @@ export function roadStraight(params?: Record<string, unknown>): string {
 }
 
 /**
- * road-corner (1×1, orientations 4): connects two adjacent edge midpoints,
- * bending through the tile centre. Orientation rotates which corner.
+ * road-corner (1×1, orientations 4): connects two adjacent edge midpoints.
+ * A cubic whose end tangents run along the edge axes, so kerbs meet a
+ * straight (or any other contract shape) in the next tile without a kink.
+ * The control points hug the turned diamond vertex, keeping the wide
+ * carriageway inside the tile.
  */
 export function roadCorner(params?: Record<string, unknown>): string {
   const o = readOrientation(params);
-  // ordered ring of midpoints, clockwise: mNE, mSE, mSW, mNW
-  const ring = [mNE, mSE, mSW, mNW];
   const a = ring[o % 4];
   const b = ring[(o + 1) % 4];
-  // Diamond vertex shared by the two connected edges (the corner being turned).
-  // Pull the spine's control toward it so the wide carriageway hugs the turn
-  // instead of ballooning outside the tile (tileC alone bulges at ROAD_HALF 16).
-  const verts: Pt[] = [
-    { x: HALF_W, y: HALF_H }, // between NE & SE
-    { x: 0, y: HALF_H * 2 }, // between SE & SW
-    { x: -HALF_W, y: HALF_H }, // between SW & NW
-    { x: 0, y: 0 }, // between NW & NE
-  ];
-  const v = verts[o % 4];
-  const ctrl: Pt = { x: (tileC.x + v.x) / 2, y: (tileC.y + v.y) / 2 };
+  const K = 9; // control-point pull — tight turn, still smooth at ROAD_HALF 16
+  const offs = cubicOffsets(a, add(a, inward[o % 4], K), add(b, inward[(o + 1) % 4], K), b, ROAD_HALF);
   return group(0, 0, [
-    curvedBand(a, ctrl, b, ROAD_HALF, STROKE, false),
-    // centre dashes along the arc
-    dashArc(a, ctrl, b),
+    offsetsFill(offs, ASPHALT),
+    polyline(offs.left, STROKE, INK),
+    polyline(offs.right, STROKE, INK),
+    spineDashes(offs.spine, FULL_DASHES),
   ]);
 }
 
 /**
- * road-t (1×1, orientations 4): a straight along one axis plus a stub into the
- * third edge. Orientation rotates which edge is the stem.
+ * road-t (1×1, orientations 4): a through-road along one axis plus a stem
+ * into the third edge. The through kerb on the stem side breaks at the stem
+ * mouth, and the stem kerbs run up to that kerb line — an open junction, not
+ * a sealed-off stub. Orientation rotates which edge is the stem.
  */
 export function roadT(params?: Record<string, unknown>): string {
   const o = readOrientation(params);
-  const ring = [mNE, mSE, mSW, mNW];
-  // through-road connects ring[o] .. ring[o+2]; stem goes ring[o+1] .. centre.
   const a = ring[o % 4];
   const b = ring[(o + 2) % 4];
-  const stem = ring[(o + 1) % 4];
+  const s = ring[(o + 1) % 4];
+  const u = unit(sub(b, a));
+  const pvu = perp(a, b);
+  // which side of the through-road the stem is on
+  const sgn = Math.sign(dot(sub(s, tileC), pvu)) || 1;
+  const nearA = add(a, pvu, ROAD_HALF * sgn);
+  const nearB = add(b, pvu, ROAD_HALF * sgn);
+  const farA = add(a, pvu, -ROAD_HALF * sgn);
+  const farB = add(b, pvu, -ROAD_HALF * sgn);
+  const ds = unit(sub(tileC, s));
+  const pvs = perp(s, tileC);
+  const s1 = add(s, pvs, ROAD_HALF);
+  const s2 = add(s, pvs, -ROAD_HALF);
+  const i1 = lineIntersect(s1, ds, nearA, u);
+  const i2 = lineIntersect(s2, ds, nearA, u);
+  // order the two mouth intersections along the through axis
+  const [first, second] = dot(sub(i1, nearA), u) < dot(sub(i2, nearA), u) ? [i1, i2] : [i2, i1];
   return group(0, 0, [
-    roadBand(a, b, true),
-    roadBand(stem, tileC, false),
+    bandFill(a, b, ROAD_HALF, ASPHALT),
+    bandFill(s, tileC, ROAD_HALF, ASPHALT),
+    line(farA, farB, STROKE, INK), // far kerb, unbroken
+    line(nearA, first, STROKE, INK), // near kerb, broken at the stem mouth
+    line(second, nearB, STROKE, INK),
+    line(s1, i1, STROKE, INK), // stem kerbs up to the through kerb line
+    line(s2, i2, STROKE, INK),
+    centreDashes(a, b, FULL_DASHES),
   ]);
 }
 
-function dashArc(a: Pt, c: Pt, b: Pt): string {
-  const frags: string[] = [];
-  const steps = 4;
-  for (let i = 0; i < steps; i++) {
-    const t0 = (i + 0.3) / steps;
-    const t1 = (i + 0.6) / steps;
-    const q = (t: number): Pt => {
-      const mt = 1 - t;
-      return { x: mt * mt * a.x + 2 * mt * t * c.x + t * t * b.x, y: mt * mt * a.y + 2 * mt * t * c.y + t * t * b.y };
-    };
-    frags.push(line(q(t0), q(t1), 0.6, INK));
+/**
+ * road-cross (1×1, orientations 1): both axes crossing at the tile centre.
+ * Each kerb line breaks where the other road passes — four open corners.
+ */
+export function roadCross(): string {
+  const axes: Array<[Pt, Pt]> = [
+    [mNW, mSE],
+    [mNE, mSW],
+  ];
+  const frags: string[] = [bandFill(mNW, mSE, ROAD_HALF, ASPHALT), bandFill(mNE, mSW, ROAD_HALF, ASPHALT)];
+  for (let r = 0; r < 2; r++) {
+    const [a, b] = axes[r];
+    const [c, d] = axes[1 - r];
+    const u = unit(sub(b, a));
+    const pvu = perp(a, b);
+    const pvo = perp(c, d);
+    for (const sgn of [1, -1]) {
+      const kA = add(a, pvu, ROAD_HALF * sgn);
+      const kB = add(b, pvu, ROAD_HALF * sgn);
+      // intersections with BOTH kerb lines of the crossing road
+      const uo = unit(sub(d, c));
+      const j1 = lineIntersect(kA, u, add(c, pvo, ROAD_HALF), uo);
+      const j2 = lineIntersect(kA, u, add(c, pvo, -ROAD_HALF), uo);
+      const [first, second] = dot(sub(j1, kA), u) < dot(sub(j2, kA), u) ? [j1, j2] : [j2, j1];
+      frags.push(line(kA, first, STROKE, INK));
+      frags.push(line(second, kB, STROKE, INK));
+    }
+    // outer dashes only — the junction box stays clear
+    frags.push(centreDashes(a, b, [[0.05, 0.18], [0.82, 0.95]]));
   }
-  return frags.join('');
+  return group(0, 0, frags);
 }
 
 // ========================================================================
-// RIVERS — wavier double line, same edge-midpoint contract
+// RIVERS — filled water band with darker banks, same edge-midpoint contract
 // ========================================================================
 
 const RIVER_HALF = 7;
 
-/** river-straight (1×1, orientations 2): wavy double line across one axis. */
+/** river-straight (1×1, orientations 2): gently bowed water band across one axis. */
 export function riverStraight(params?: Record<string, unknown>): string {
   const o = readOrientation(params);
   const [a, b] = o % 2 === 0 ? [mNW, mSE] : [mNE, mSW];
-  // control point offset perpendicular to give a gentle S; endpoints stay on
-  // the exact midpoints so it tiles.
-  const pv = perp(a, b);
-  const mid = lerp(a, b, 0.5);
-  const ctrl = { x: mid.x + pv.x * 3, y: mid.y + pv.y * 3 };
-  return group(0, 0, [curvedBand(a, ctrl, b, RIVER_HALF, STROKE, true, o + 1)]);
+  // straight spine + tapered wobble: wavy interior, exactly on-axis at both
+  // edges, so neighbouring tiles meet without a kink
+  const offs = quadOffsets(a, lerp(a, b, 0.5), b, RIVER_HALF, true, o + 1);
+  return group(0, 0, [
+    offsetsFill(offs, WATER),
+    polyline(offs.left, STROKE_THIN, BANK),
+    polyline(offs.right, STROKE_THIN, BANK),
+  ]);
 }
 
-/** river-bend (1×1, orientations 4): wavy bend between two adjacent edges. */
+/**
+ * river-bend (1×1, orientations 4): water bend between two adjacent edges.
+ * Cubic with inward end tangents (same recipe as road-corner) — the old quad
+ * through the tile centre was tighter than RIVER_HALF and the inner bank
+ * self-intersected into a cusp.
+ */
 export function riverBend(params?: Record<string, unknown>): string {
   const o = readOrientation(params);
-  const ring = [mNE, mSE, mSW, mNW];
   const a = ring[o % 4];
   const b = ring[(o + 1) % 4];
-  return group(0, 0, [curvedBand(a, tileC, b, RIVER_HALF, STROKE, true, o + 2)]);
+  const K = 9;
+  const offs = cubicOffsets(a, add(a, inward[o % 4], K), add(b, inward[(o + 1) % 4], K), b, RIVER_HALF);
+  return group(0, 0, [
+    offsetsFill(offs, WATER),
+    polyline(offs.left, STROKE_THIN, BANK),
+    polyline(offs.right, STROKE_THIN, BANK),
+  ]);
 }
 
 // ========================================================================

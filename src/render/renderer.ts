@@ -7,16 +7,20 @@
 // keep it simple (no diffing).
 
 import type { Entity, GridPlacement, SceneDocument } from '../core/model.ts';
-import { isEntityVisible } from '../core/model.ts';
+import { isEntityVisible, resolveRouteStops } from '../core/model.ts';
 import { sortForRender } from '../core/depth.ts';
 import { tileToScreen } from '../core/iso.ts';
 import { getAsset } from '../assets/library.ts';
-import { INK, ACCENT } from '../assets/style.ts';
+import { INK, PAPER, ACCENT } from '../assets/style.ts';
+import { circle, text } from '../assets/primitives.ts';
 import { resizeHandleScreen } from './resize.ts';
 
 export interface ViewState {
-  /** id of the entity under a persistent emphasis (selection). */
-  selectedId?: string;
+  /**
+   * ids under a persistent emphasis (selection). Mirrors the spotlightIds Set
+   * pattern so a multi-selection highlights every member with data-selected.
+   */
+  selectedIds?: Set<string>;
   /** id of the entity currently hovered (transient emphasis). */
   hoverId?: string;
   /**
@@ -48,7 +52,11 @@ function round(v: number): number {
 }
 
 /** SVG fragment for one entity (its <g> wrapper + stamped asset). */
-function renderEntity(entity: Entity, view: ViewState): string {
+function renderEntity(entity: Entity, doc: SceneDocument, view: ViewState): string {
+  // Routes are drawn from resolved world-space waypoints, not the asset
+  // registry — their geometry spans the scene rather than sitting at one origin.
+  if (entity.type === 'route') return renderRoute(entity, doc, view);
+
   const def = getAsset(entity.asset.symbol);
   const fragment = def ? def.render(renderParams(entity)) : missingGlyph();
 
@@ -63,7 +71,7 @@ function renderEntity(entity: Entity, view: ViewState): string {
   // turns into an ACCENT drop-shadow. Kept as an attribute (not baked geometry)
   // so it never affects export.
   if (view.hoverId === entity.id) attrs.push('data-hover="true"');
-  if (view.selectedId === entity.id) attrs.push('data-selected="true"');
+  if (view.selectedIds?.has(entity.id)) attrs.push('data-selected="true"');
 
   // Present-mode spotlight dimming.
   if (view.spotlightIds && !view.spotlightIds.has(entity.id)) {
@@ -71,6 +79,90 @@ function renderEntity(entity: Entity, view: ViewState): string {
   }
 
   return `<g ${attrs.join(' ')}>${fragment}</g>`;
+}
+
+// --- routes ---------------------------------------------------------------
+
+// Dashed accent line (~2px) over a wider white casing for legibility.
+const ROUTE_STROKE = 2;
+const ROUTE_CASING = 4; // white casing width beneath the accent line
+const ROUTE_DASH = '6 4';
+const BADGE_R = 9; // step-badge radius in world px
+
+/**
+ * A route entity renders as a dashed ACCENT polyline through its resolved
+ * waypoints, a numbered step badge at each waypoint, and a label near the
+ * entity's placement position.
+ *
+ * COORDINATE SPACE: unlike other entities, the route's <g> carries NO translate
+ * transform. `resolveRouteStops` (and the free placement that positions the
+ * label) already yield world-space screen px, so the geometry is emitted in
+ * world coords directly — this avoids re-basing every waypoint onto an origin.
+ * The wrapper keeps `data-entity-id`, hover/selection hooks and spotlight
+ * dimming, so hit-testing, emphasis and present-mode behave exactly as for any
+ * other entity (all of which key off the attributes, not the transform).
+ *
+ * With fewer than two resolvable waypoints no path is drawn; with none, only
+ * the (empty) wrapper <g> is emitted.
+ */
+function renderRoute(entity: Entity, doc: SceneDocument, view: ViewState): string {
+  const attrs: string[] = [`data-entity-id="${entity.id}"`];
+  if (view.hoverId === entity.id) attrs.push('data-hover="true"');
+  if (view.selectedIds?.has(entity.id)) attrs.push('data-selected="true"');
+  if (view.spotlightIds && !view.spotlightIds.has(entity.id)) {
+    attrs.push(`opacity="${DIM}"`);
+  }
+
+  const stops = resolveRouteStops(doc, entity);
+  const frags: string[] = [];
+
+  if (stops.length >= 2) frags.push(routePath(stops));
+  stops.forEach((p, i) => frags.push(routeBadge(p.x, p.y, i + 1)));
+  if (stops.length >= 1) {
+    const origin = entityOrigin(entity);
+    frags.push(routeLabel(origin.x, origin.y, entity.label));
+  }
+
+  return `<g ${attrs.join(' ')}>${frags.join('')}</g>`;
+}
+
+/** Dashed ACCENT polyline through the waypoints over a white casing. */
+function routePath(stops: Array<{ x: number; y: number }>): string {
+  const pts = stops.map((p) => `${round(p.x)},${round(p.y)}`).join(' ');
+  const casing =
+    `<polyline points="${pts}" fill="none" stroke="${PAPER}" ` +
+    `stroke-width="${ROUTE_CASING}" stroke-linejoin="round" stroke-linecap="round"/>`;
+  const accent =
+    `<polyline points="${pts}" fill="none" stroke="${ACCENT}" ` +
+    `stroke-width="${ROUTE_STROKE}" stroke-linejoin="round" stroke-linecap="round" ` +
+    `stroke-dasharray="${ROUTE_DASH}"/>`;
+  return casing + accent;
+}
+
+/** Numbered step badge: ACCENT disc, white outline, white 1-based number. */
+function routeBadge(x: number, y: number, step: number): string {
+  const cx = round(x);
+  const cy = round(y);
+  return (
+    circle({ x: cx, y: cy }, BADGE_R, { fill: ACCENT, stroke: PAPER, strokeWidth: 1.5 }) +
+    text(cx, cy + 3.2, String(step), {
+      size: 9,
+      weight: 'bold',
+      fill: PAPER,
+      anchor: 'middle',
+    })
+  );
+}
+
+/** Route label in the app's callout style (small bold ACCENT text). */
+function routeLabel(x: number, y: number, label: string): string {
+  return text(round(x), round(y) - BADGE_R - 4, label, {
+    size: 9,
+    weight: 'bold',
+    fill: ACCENT,
+    anchor: 'middle',
+    letterSpacing: 0.5,
+  });
 }
 
 /**
@@ -164,7 +256,7 @@ export function renderScene(
   const ordered = sortForRender(visible, isGroundAsset); // ground plates → scene → annotations
 
   for (const entity of ordered) {
-    parts.push(renderEntity(entity, view));
+    parts.push(renderEntity(entity, doc, view));
   }
 
   if (view.resizeHandleFor) parts.push(renderResizeHandle(view.resizeHandleFor));
@@ -204,6 +296,7 @@ export function renderSceneToString(doc: SceneDocument, view: ViewState = {}): s
   const parts: string[] = [];
   if (view.showGrid) parts.push(renderGridDots(doc));
   const visible = doc.entities.filter((e) => isEntityVisible(doc, e));
-  for (const entity of sortForRender(visible, isGroundAsset)) parts.push(renderEntity(entity, view));
+  for (const entity of sortForRender(visible, isGroundAsset))
+    parts.push(renderEntity(entity, doc, view));
   return parts.join('');
 }

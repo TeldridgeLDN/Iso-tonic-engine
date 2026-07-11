@@ -31,7 +31,7 @@ interface CustomLayer { id: string; name: string; visible: boolean }
 ```ts
 type EntityType =
   | 'user' | 'team' | 'process' | 'department' | 'organisation'
-  | 'physical-infra' | 'digital-infra' | 'annotation';
+  | 'physical-infra' | 'digital-infra' | 'annotation' | 'route';
 
 interface Entity {
   id: string;                      // unique, stable (nanoid-style)
@@ -96,7 +96,22 @@ interface CalloutParams {
   angle?: number;                  // ribbon angle in degrees (default follows iso axis, ~26.57)
   leader?: boolean;                // draw leader line to anchorEntityId
 }
+
+type RouteStop =
+  | { entityId: string }           // ride an existing entity's placement position
+  | { x: number; y: number };      // a free world-px waypoint
+
+interface RouteParams {
+  stops: RouteStop[];              // >= 1; ordered path through stops
+}
 ```
+
+A `route` entity (a process-flow / user-journey line) has `asset.symbol`
+`'route-path'` and `asset.params: RouteParams`. Its `placement` is
+`{ mode: 'free', x, y }` — the position of the route's label, conventionally
+near the first stop. Entity stops resolve to the referenced entity's placement
+position (grid stops project via core `tileToScreen`); free stops use their own
+coords (see core `resolveRouteStops`).
 
 ## Rules
 
@@ -107,6 +122,14 @@ interface CalloutParams {
 - Hidden layer (type or custom) ⇒ entity excluded from render **and** export.
   An entity is visible only if its type layer AND all its custom layers are visible.
 - Annotations render above all scene content, always.
+- `route` entities must have `asset.symbol` `'route-path'` and an `asset.params.stops`
+  array (length >= 1) where each stop is `{entityId}` or `{x, y}`; a malformed
+  stops shape is rejected (structural, like placement). A stop `entityId` that
+  is dangling or references another route is a warning, not a rejection (like
+  footprint overlap); `resolveRouteStops` skips such stops.
+- Spotlight lights route linkage one hop: a focal route additionally lights its
+  stop entities; a focal non-route additionally lights every route that lists it
+  as a stop. No further transitivity through routes.
 - Unknown fields are preserved on load/save (forward compatibility).
 - `version` bumps require a migration in `core/schema.ts`; loaders migrate
   then validate.

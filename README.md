@@ -21,6 +21,9 @@ isometric city drawings.
   accessory; randomise; save and stamp named presets.
 - **Layers** — automatic type layers (one per entity type) plus named custom
   layers; hidden layers are excluded from exports.
+- **Process-flow routes** — numbered dashed journey paths drawn stop by stop
+  with the route tool (C); stops anchor to entities and follow them when
+  moved. Spotlighting a route lights its stops (and vice versa).
 - **Edit / Present modes** — hover tooltips everywhere; in Present mode,
   clicking spotlights an entity and its semantic relatives while everything
   else fades.
@@ -36,7 +39,7 @@ isometric city drawings.
 ```bash
 npm install
 npm run dev            # develop
-npm test               # 122 unit tests (core, assets contracts, io, wizard)
+npm test               # unit tests (core, assets contracts, io, wizard, routes)
 npm run build          # production build (static, deployable anywhere)
 npm run contact-sheet  # render every asset to contact-sheet.svg
 ```
@@ -81,9 +84,10 @@ re-running the script to rotate the salt.
 | [docs/SCHEMA.md](docs/SCHEMA.md) | The `.iso.json` scene document contract (also the interface for external generators, e.g. an AI-driven interview) |
 | [docs/STYLE_CONTRACT.md](docs/STYLE_CONTRACT.md) | Projection maths, palette, stroke rules, and anchor conventions every asset follows |
 
-## Roadmap (parked by design)
+## Formerly parked, now shipped
 
-- Process-flow arrows (numbered dashed routes for user journeys)
-- Parametric customisation panels for infrastructure (the figurine editor's
-  chassis already supports this via `paramSchema`)
-- A Claude-side interview skill emitting `.iso.json` via the schema contract
+- ~~Process-flow arrows~~ — the route tool (numbered dashed journey paths)
+- ~~Parametric customisation panels for infrastructure~~ — the properties
+  panel edits any asset's `paramSchema` (buildings, shops, zones)
+- ~~A Claude-side interview skill~~ — the `iso-map-interview` skill emits
+  `.iso.json` via the schema contract, including journey routes
