@@ -169,8 +169,11 @@ export function resolveFreeDrop(
 
 export type Mode = 'edit' | 'present';
 
-/** Canvas interaction tool (edit mode): move/select entities, or resize zones. */
-export type Tool = 'select' | 'resize';
+/**
+ * Canvas interaction tool (edit mode): move/select entities, resize zones, or
+ * draw a process-flow route by clicking successive stops.
+ */
+export type Tool = 'select' | 'resize' | 'route';
 
 export interface InteractionHost {
   history: History;
@@ -191,6 +194,13 @@ export interface InteractionHost {
   getResizeArmed?(): boolean;
   /** The active canvas tool (edit mode). Defaults to 'select' when absent. */
   getTool?(): Tool;
+  /**
+   * Route tool: a click added a stop — `entityId` is the hit entity (if any),
+   * `world` the pointer's world-px position. The host decides entity vs free.
+   */
+  onRoutePoint?(entityId: string | undefined, world: { x: number; y: number }): void;
+  /** Route tool: finish the in-progress route (double-click). */
+  onRouteFinish?(): void;
   /** Called when the spotlight focus changes (present mode). */
   onSpotlight(id: string | undefined): void;
   /** Called on hover change so the app can re-render + position the tooltip. */
@@ -253,6 +263,7 @@ export class InteractionController {
     svg.addEventListener('pointermove', this.onPointerMove);
     svg.addEventListener('pointerup', this.onPointerUp);
     svg.addEventListener('pointerleave', this.onPointerLeave);
+    svg.addEventListener('dblclick', this.onDoubleClick);
     svg.addEventListener('wheel', this.onWheel, { passive: false });
   }
 
@@ -282,6 +293,7 @@ export class InteractionController {
     this.svg.removeEventListener('pointermove', this.onPointerMove);
     this.svg.removeEventListener('pointerup', this.onPointerUp);
     this.svg.removeEventListener('pointerleave', this.onPointerLeave);
+    this.svg.removeEventListener('dblclick', this.onDoubleClick);
     this.svg.removeEventListener('wheel', this.onWheel);
   }
 
@@ -429,6 +441,12 @@ export class InteractionController {
           }
           return;
         }
+        // Route tool: a drag pans the canvas (so long routes can be drawn while
+        // scrolling); clicks add stops. Never move/select an entity here.
+        if (this.host.getMode() === 'edit' && this.host.getTool?.() === 'route') {
+          this.drag = { kind: 'pan', lastX: lp.x, lastY: lp.y };
+          return;
+        }
         // Shift / armed drag over a resizable zone → resize it (select tool).
         if (this.host.getMode() === 'edit' && this.drag.resizeTargetId) {
           const targetId = this.drag.resizeTargetId;
@@ -562,8 +580,13 @@ export class InteractionController {
       this.host.setMarquee?.(undefined);
       this.host.onMarquee?.(ids);
     } else if (this.drag.kind === 'pending') {
-      // A click (no drag past threshold).
-      this.handleClick(this.drag.entityId, this.drag.shift === true);
+      // Route tool: a click adds a stop (entity hit or free point). Otherwise a
+      // click selects (edit) / spotlights (present).
+      if (this.host.getMode() === 'edit' && this.host.getTool?.() === 'route') {
+        this.host.onRoutePoint?.(this.drag.entityId, this.worldPoint(evt));
+      } else {
+        this.handleClick(this.drag.entityId, this.drag.shift === true);
+      }
     }
     // pan drag: nothing to commit.
 
@@ -640,6 +663,13 @@ export class InteractionController {
   private onPointerLeave = (): void => {
     this.hoverId = undefined;
     this.host.onHover(undefined, 0, 0);
+  };
+
+  /** Double-click finishes an in-progress route (route tool, edit mode). */
+  private onDoubleClick = (): void => {
+    if (this.host.getMode() === 'edit' && this.host.getTool?.() === 'route') {
+      this.host.onRouteFinish?.();
+    }
   };
 
   private onWheel = (evt: WheelEvent): void => {

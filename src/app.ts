@@ -22,6 +22,7 @@ import {
 } from './render/interactions.ts';
 import type { AppContext, PlacementRequest } from './ui/context.ts';
 import { PlacementController } from './ui/placement.ts';
+import { RouteBuilder, routeStopFor } from './ui/routeBuilder.ts';
 import { Palette } from './ui/palette.ts';
 import { LayersPanel } from './ui/layersPanel.ts';
 import { PropertiesPanel } from './ui/propertiesPanel.ts';
@@ -54,6 +55,8 @@ export class App implements AppContext {
   private camera: Camera;
   private ghost: Ghost | undefined;
   private placement!: PlacementController;
+  private readonly routeBuilder = new RouteBuilder();
+  private routeSeq = 0;
 
   private svg!: SVGSVGElement;
   private sceneRoot!: SVGGElement;
@@ -179,9 +182,31 @@ export class App implements AppContext {
   setTool(tool: Tool): void {
     const next = this.mode === 'present' ? 'select' : tool;
     if (next === this.tool) return;
+    // Switching away from the route tool commits any in-progress route.
+    if (this.tool === 'route') this.finishRoute();
     this.tool = next;
     this.notifySelection();
     this.render();
+  }
+
+  /**
+   * Commit the in-progress route (if any stops) as ONE undoable PlaceEntity,
+   * then clear the builder. A stop-less builder is a silent no-op. Selects the
+   * new route so the properties panel opens on it. Shared by double-click, the
+   * Enter key, and tool/mode switches.
+   */
+  private finishRoute(): void {
+    const result = this.routeBuilder.finish(
+      this.history.document,
+      `e-route-${Date.now().toString(36)}-${this.routeSeq++}`
+    );
+    this.routeBuilder.reset();
+    if (result) {
+      this.history.execute(result.command); // subscribe → render
+      this.select(result.entity.id);
+    } else {
+      this.render();
+    }
   }
 
   // Backward-compatible AppContext resize-arming: it now simply mirrors the
@@ -223,6 +248,7 @@ export class App implements AppContext {
     this.clearSelection();
     this.spotlight = undefined;
     this.ghost = undefined;
+    this.routeBuilder.reset();
     this.placement = this.makePlacementController();
     // Rewire the document-change subscription for re-render + panels.
     this.history.subscribe(() => this.render());
@@ -330,6 +356,12 @@ export class App implements AppContext {
         entities: [...doc.entities, { ...preview.entity, placement: preview.placement }],
       };
     }
+    // Route-drawing preview: append the in-progress route entity so the real
+    // route renderer draws its dashed path + numbered badges live.
+    const routePreview = this.routeBuilder.previewEntity();
+    if (routePreview) {
+      return { ...doc, entities: [...doc.entities, routePreview] };
+    }
     return doc;
   }
 
@@ -367,6 +399,12 @@ export class App implements AppContext {
       );
       el2?.setAttribute('data-ghost', 'true');
       if (preview.rejected) el2?.setAttribute('data-rejected', 'true');
+    }
+    const routePreview = this.routeBuilder.previewEntity();
+    if (routePreview) {
+      this.sceneRoot
+        .querySelector(`[data-entity-id="${routePreview.id}"]`)
+        ?.setAttribute('data-editor-only', 'true');
     }
 
     this.toolbar.refresh({
@@ -458,6 +496,12 @@ export class App implements AppContext {
         this.notifySelection();
         this.render();
       },
+      onRoutePoint: (entityId, world) => {
+        const stop = routeStopFor(this.history.document, entityId, world);
+        this.routeBuilder.addStop(stop);
+        this.render();
+      },
+      onRouteFinish: () => this.finishRoute(),
       setMarquee: (rect) => this.drawMarquee(rect),
       onSpotlight: (id) => {
         this.spotlightLayerId = undefined; // an entity click supersedes a layer spotlight
@@ -519,6 +563,8 @@ export class App implements AppContext {
   // --- mode / camera / keyboard ------------------------------------------
 
   private toggleMode(): void {
+    // Leaving edit mode commits any in-progress route (tool/mode switch = finish).
+    if (this.routeBuilder.active) this.finishRoute();
     this.mode = this.mode === 'edit' ? 'present' : 'edit';
     // Present mode has no zone resizing — force the tool back to select.
     if (this.mode === 'present') this.tool = 'select';
@@ -587,6 +633,13 @@ export class App implements AppContext {
         this.cancelPlacement();
         return;
       }
+      // Escape discards an in-progress route with NO command (before it can
+      // fall through to leaving the route tool).
+      if (this.routeBuilder.active) {
+        this.routeBuilder.reset();
+        this.render();
+        return;
+      }
       // Cancel an in-progress resize/move drag before clearing selection.
       if (this.controller?.cancelDrag()) return;
       // Escape also returns to the select tool (SimCity convention).
@@ -627,7 +680,16 @@ export class App implements AppContext {
         this.deleteSelected();
       }
     }
-    // Tool shortcuts (edit mode, not while typing): V = select, Z = resize.
+    // Enter finishes the in-progress route (edit mode, not while typing).
+    if (!typing && !meta && this.mode === 'edit' && evt.key === 'Enter') {
+      if (this.routeBuilder.active) {
+        evt.preventDefault();
+        this.finishRoute();
+        return;
+      }
+    }
+    // Tool shortcuts (edit mode, not while typing): V = select, Z = resize,
+    // C = draw route.
     if (!typing && !meta && this.mode === 'edit' && !this.placement.active) {
       const k = evt.key.toLowerCase();
       if (k === 'v') {
@@ -636,6 +698,9 @@ export class App implements AppContext {
       } else if (k === 'z') {
         evt.preventDefault();
         this.setTool('resize');
+      } else if (k === 'c') {
+        evt.preventDefault();
+        this.setTool('route');
       }
     }
   };
