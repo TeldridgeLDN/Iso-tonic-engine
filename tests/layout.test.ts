@@ -16,22 +16,24 @@ function ent(id: string, type: Entity['type'], parentId?: string): Entity {
 }
 
 function sampleDoc(): SceneDocument {
+  // Three levels of nested territories (the wizard's org → dept → team shape),
+  // plus infra, users, an annotation, a top-level extra and an orphan user.
   const d = createEmptyDocument('t', '2020-01-01T00:00:00.000Z');
   d.entities = [
-    ent('org', 'organisation'),
-    ent('dept1', 'department', 'org'),
-    ent('dept2', 'department', 'org'),
-    ent('teamA', 'team', 'dept1'),
-    ent('teamB', 'team', 'dept1'),
-    ent('teamC', 'team', 'dept2'),
+    ent('org', 'territory'),
+    ent('dept1', 'territory', 'org'),
+    ent('dept2', 'territory', 'org'),
+    ent('teamA', 'territory', 'dept1'),
+    ent('teamB', 'territory', 'dept1'),
+    ent('teamC', 'territory', 'dept2'),
     ent('user1', 'user', 'teamA'),
     ent('user2', 'user', 'teamA'),
     ent('user3', 'user', 'teamB'),
     ent('srv', 'digital-infra', 'dept1'),
     ent('van', 'physical-infra', 'dept2'),
-    ent('proc', 'process', 'teamA'),
+    ent('proc', 'territory', 'teamA'), // 4th nesting level
     ent('note', 'annotation'),
-    ent('orphan', 'department'), // top-level extra
+    ent('orphan', 'territory'), // top-level extra
     ent('lonelyUser', 'user'), // unparented user
   ];
   return d;
@@ -142,5 +144,29 @@ describe('autoLayout placement semantics', () => {
     const u2 = out.entities.find((e) => e.id === 'user2')!.placement;
     // Different ids → different seeded offsets → distinct positions.
     expect(u1).not.toEqual(u2);
+  });
+
+  it('nests child territories and their grid infra WITHIN the parent footprint', () => {
+    const out = autoLayout(sampleDoc());
+    const g = (id: string): GridPlacement =>
+      out.entities.find((e) => e.id === id)!.placement as GridPlacement;
+    const contains = (outer: GridPlacement, inner: GridPlacement): boolean =>
+      inner.x >= outer.x &&
+      inner.y >= outer.y &&
+      inner.x + inner.footprint.w <= outer.x + outer.footprint.w &&
+      inner.y + inner.footprint.d <= outer.y + outer.footprint.d;
+
+    for (const [child, parent] of [
+      ['dept1', 'org'],
+      ['dept2', 'org'],
+      ['teamA', 'dept1'],
+      ['teamB', 'dept1'],
+      ['teamC', 'dept2'],
+      ['proc', 'teamA'],
+      ['srv', 'dept1'], // grid infra sits inside its parent territory too
+      ['van', 'dept2'],
+    ] as const) {
+      expect(contains(g(parent), g(child)), `${child} within ${parent}`).toBe(true);
+    }
   });
 });

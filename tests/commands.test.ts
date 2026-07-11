@@ -25,7 +25,7 @@ import type {
 function ent(id: string, over: Partial<Entity> = {}): Entity {
   return {
     id,
-    type: 'team',
+    type: 'territory',
     label: id,
     placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 1, d: 1 } },
     asset: { symbol: 's' },
@@ -132,20 +132,8 @@ describe('every command inverts', () => {
     assertInverts(new RotateEntity({ entityId: 'a', from: 2, to: 3 }), d);
   });
 
-  it('UpdateEntityProps patches userGoal/orgGoal invertibly', () => {
-    assertInverts(
-      new UpdateEntityProps('a', { userGoal: 'renew my passport', orgGoal: 'reduce fraud' }),
-      fixture()
-    );
-  });
-
-  it('UpdateEntityProps clearing a goal invertibly', () => {
-    const d = fixture();
-    d.entities = d.entities.map((e) =>
-      e.id === 'a' ? { ...e, userGoal: 'existing goal' } : e
-    );
-    assertInverts(new UpdateEntityProps('a', { userGoal: null }), d);
-  });
+  // (The two UpdateEntityProps userGoal/orgGoal tests were deleted with the
+  // territory contract: the goal patch fields were removed from the command.)
 
   it('UpdateEntityProps (label/description/params)', () => {
     assertInverts(
@@ -195,7 +183,7 @@ describe('every command inverts', () => {
   });
 
   it('SetTypeLayerVisibility (existing key)', () => {
-    assertInverts(new SetTypeLayerVisibility('team', false), fixture());
+    assertInverts(new SetTypeLayerVisibility('territory', false), fixture());
   });
 
   it('SetTypeLayerVisibility (new key)', () => {

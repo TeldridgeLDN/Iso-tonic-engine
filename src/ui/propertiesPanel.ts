@@ -29,10 +29,7 @@ const FACING_LABELS = ['N', 'E', 'S', 'W'] as const;
 
 const TYPE_LABELS: Record<string, string> = {
   user: 'Person',
-  team: 'Team',
-  process: 'Process',
-  department: 'Department',
-  organisation: 'Organisation',
+  territory: 'Territory',
   'physical-infra': 'Physical infra',
   'digital-infra': 'Digital infra',
   annotation: 'Annotation',
@@ -89,8 +86,6 @@ export class PropertiesPanel {
     // Route stops: read-only count + "Remove last stop" (routes only).
     if (entity.type === 'route') this.body.append(this.routeStopsField(entity));
 
-    this.body.append(this.userGoalField(entity));
-    this.body.append(this.orgGoalField(entity));
     this.body.append(this.parentField(entity));
     this.body.append(this.layersField(entity));
 
@@ -179,51 +174,6 @@ export class PropertiesPanel {
     btn.disabled = count <= 1;
     wrap.append(btn);
     return field('Stops', wrap);
-  }
-
-  private userGoalField(entity: Entity): HTMLElement {
-    return this.goalField(
-      entity,
-      'User goal',
-      'userGoal',
-      'What the user is trying to do',
-      entity.userGoal
-    );
-  }
-
-  private orgGoalField(entity: Entity): HTMLElement {
-    return this.goalField(
-      entity,
-      'Organisation goal',
-      'orgGoal',
-      'What the organisation wants',
-      entity.orgGoal
-    );
-  }
-
-  /** Shared builder for the two goal inputs (UpdateEntityProps, null clears). */
-  private goalField(
-    entity: Entity,
-    label: string,
-    key: 'userGoal' | 'orgGoal',
-    placeholder: string,
-    current: string | undefined
-  ): HTMLElement {
-    const input = el('input', {
-      class: 'iso-input',
-      attrs: { type: 'text', placeholder },
-    }) as HTMLInputElement;
-    input.value = current ?? '';
-    commitOn(input, () => {
-      const next = input.value.trim();
-      const prev = current ?? '';
-      if (next === prev) return;
-      // Empty string clears the goal (null), otherwise sets it.
-      this.ctx.history.execute(
-        new UpdateEntityProps(entity.id, { [key]: next === '' ? null : next })
-      );
-    });
-    return field(label, input);
   }
 
   /** ↻ rotate button + current-facing indicator. Absent for fixed assets. */

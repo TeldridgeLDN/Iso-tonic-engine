@@ -24,14 +24,14 @@ function docWith(entities: Entity[]): SceneDocument {
 // nothing → undefined (no dimming).
 describe('presentSpotlight', () => {
   it('returns undefined when nothing is spotlit (no dimming)', () => {
-    const d = docWith([ent({ id: 'a', type: 'team' })]);
+    const d = docWith([ent({ id: 'a', type: 'territory' })]);
     expect(presentSpotlight(d, {})).toBeUndefined();
   });
 
   it('layer spotlight lights exactly the entities in that custom layer', () => {
     const d = docWith([
-      ent({ id: 'a', type: 'team', customLayers: ['L1'] }),
-      ent({ id: 'b', type: 'process', customLayers: ['L1', 'L2'] }),
+      ent({ id: 'a', type: 'territory', customLayers: ['L1'] }),
+      ent({ id: 'b', type: 'territory', customLayers: ['L1', 'L2'] }),
       ent({ id: 'c', type: 'user', customLayers: ['L2'] }),
       ent({ id: 'd', type: 'user' }),
     ]);
@@ -40,15 +40,15 @@ describe('presentSpotlight', () => {
   });
 
   it('layer spotlight yields an empty set when no entity is in that layer', () => {
-    const d = docWith([ent({ id: 'a', type: 'team', customLayers: ['L1'] })]);
+    const d = docWith([ent({ id: 'a', type: 'territory', customLayers: ['L1'] })]);
     const s = presentSpotlight(d, { layerId: 'nope' });
     expect(s).toEqual(new Set<string>());
   });
 
   it('layerId wins over entityId when both are set', () => {
     const d = docWith([
-      ent({ id: 'a', type: 'team', customLayers: ['L1'] }),
-      ent({ id: 'b', type: 'process' }),
+      ent({ id: 'a', type: 'territory', customLayers: ['L1'] }),
+      ent({ id: 'b', type: 'territory' }),
     ]);
     // entityId 'b' would otherwise light only 'b'; layerId must take precedence.
     const s = presentSpotlight(d, { layerId: 'L1', entityId: 'b' });
@@ -57,10 +57,10 @@ describe('presentSpotlight', () => {
 
   it('entity spotlight delegates to spotlightSet', () => {
     const d = docWith([
-      ent({ id: 'org', type: 'organisation' }),
-      ent({ id: 'dept', type: 'department', parentId: 'org' }),
-      ent({ id: 'team', type: 'team', parentId: 'dept' }),
-      ent({ id: 'team2', type: 'team', parentId: 'dept' }),
+      ent({ id: 'org', type: 'territory' }),
+      ent({ id: 'dept', type: 'territory', parentId: 'org' }),
+      ent({ id: 'team', type: 'territory', parentId: 'dept' }),
+      ent({ id: 'team2', type: 'territory', parentId: 'dept' }),
       ent({ id: 'loner', type: 'user' }),
     ]);
     const s = presentSpotlight(d, { entityId: 'team' });
@@ -73,7 +73,7 @@ describe('presentSpotlight', () => {
   });
 
   it('entity spotlight for a missing focal id yields an empty set', () => {
-    const d = docWith([ent({ id: 'a', type: 'team' })]);
+    const d = docWith([ent({ id: 'a', type: 'territory' })]);
     expect(presentSpotlight(d, { entityId: 'ghost' })).toEqual(new Set<string>());
   });
 });

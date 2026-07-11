@@ -2,7 +2,7 @@
 // always-visible SimCity/Minecraft-style TOOL selector that replaced the fragile
 // modifier-key resize model. A vertical pill of icon buttons:
 //   ▲  Select / Move   (shortcut V)
-//   ⤡  Resize zones     (shortcut Z)
+//   ⤡  Resize territory  (shortcut Z)
 // The active tool shows in ACCENT. A subtle discoverability hint sits under the
 // pill when a resizable zone is selected in the select tool.
 
@@ -48,7 +48,7 @@ export function buildCanvasToolbar(hooks: CanvasToolbarHooks): CanvasToolbarHand
   );
   selectBtn.setAttribute('data-tool', 'select');
 
-  const resizeBtn = toolButton('⤡', 'Resize zones', 'Z', () =>
+  const resizeBtn = toolButton('⤡', 'Resize territory', 'Z', () =>
     hooks.setTool('resize')
   );
   resizeBtn.setAttribute('data-tool', 'resize');

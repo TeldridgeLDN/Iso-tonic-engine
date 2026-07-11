@@ -316,9 +316,6 @@ export interface EntityPropsPatch {
   description?: string;
   // Use null to explicitly clear parentId; omit to leave unchanged.
   parentId?: string | null;
-  // Use null to explicitly clear a goal; omit to leave unchanged.
-  userGoal?: string | null;
-  orgGoal?: string | null;
   // Shallow patch merged into asset.params.
   params?: Record<string, unknown>;
 }
@@ -352,20 +349,6 @@ export class UpdateEntityProps implements Command {
           delete next.parentId;
         } else {
           next.parentId = this.patch.parentId;
-        }
-      }
-      if (this.patch.userGoal !== undefined) {
-        if (this.patch.userGoal === null) {
-          delete next.userGoal;
-        } else {
-          next.userGoal = this.patch.userGoal;
-        }
-      }
-      if (this.patch.orgGoal !== undefined) {
-        if (this.patch.orgGoal === null) {
-          delete next.orgGoal;
-        } else {
-          next.orgGoal = this.patch.orgGoal;
         }
       }
       if (this.patch.params !== undefined) {

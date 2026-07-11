@@ -126,3 +126,44 @@ describe('resolveFreeDrop', () => {
     expect(next).toEqual({ mode: 'free', x: 25, y: 15 });
   });
 });
+
+describe('resolveGridDrop — territory ground exemption', () => {
+  function territoryEntity(id: string, x: number, y: number, w = 10, d = 10): Entity {
+    return {
+      id,
+      type: 'territory',
+      label: id,
+      placement: { mode: 'grid', x, y, footprint: { w, d } },
+      asset: { symbol: 'territory', params: { w, d } },
+    };
+  }
+
+  it('accepts dropping an object onto a territory (ground underlies things)', () => {
+    const obj = gridEntity('obj', 20, 20);
+    const terr = territoryEntity('terr', 0, 0, 10, 10);
+    const doc = docWith(obj, terr);
+    // move obj onto tile (3,3), inside the territory footprint
+    const res = resolveGridDrop(obj, worldAtTile(20, 20), worldAtTile(3, 3), doc);
+    expect(res.placement.x).toBe(3);
+    expect(res.placement.y).toBe(3);
+    expect(res.accepted).toBe(true);
+  });
+
+  it('accepts moving a territory underneath existing objects', () => {
+    const obj = gridEntity('obj', 3, 3);
+    const terr = territoryEntity('terr', 20, 20, 10, 10);
+    const doc = docWith(obj, terr);
+    // move territory so it covers obj at (3,3)
+    const res = resolveGridDrop(terr, worldAtTile(20, 20), worldAtTile(0, 0), doc);
+    expect(res.accepted).toBe(true);
+  });
+
+  it('still rejects object-on-object overlap', () => {
+    const a = gridEntity('a', 0, 0);
+    const b = gridEntity('b', 5, 5);
+    const terr = territoryEntity('terr', 0, 0, 10, 10);
+    const doc = docWith(a, b, terr);
+    const res = resolveGridDrop(a, worldAtTile(0, 0), worldAtTile(5, 5), doc);
+    expect(res.accepted).toBe(false);
+  });
+});

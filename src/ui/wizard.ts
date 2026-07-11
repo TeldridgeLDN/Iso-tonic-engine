@@ -209,15 +209,26 @@ export class Wizard {
   ): HTMLElement {
     const wrap = el('div', { class: 'iso-wizard-row' });
 
-    const name = el('input', {
-      class: 'iso-input',
-      attrs: { type: 'text', placeholder: step.nameLabel },
-    }) as HTMLInputElement;
-    name.value = row.name;
-    name.addEventListener('input', () => {
-      row.name = name.value;
-    });
-    wrap.append(name);
+    // Territory steps take no name — territories are unlabeled ground plates.
+    // The row is identified as "<nameLabel> N" in parent dropdowns instead.
+    if (step.entityType === 'territory' && step.multi) {
+      wrap.append(
+        el('span', {
+          class: 'iso-field-label',
+          text: `${step.nameLabel} ${index + 1}`,
+        })
+      );
+    } else {
+      const name = el('input', {
+        class: 'iso-input',
+        attrs: { type: 'text', placeholder: step.nameLabel },
+      }) as HTMLInputElement;
+      name.value = row.name;
+      name.addEventListener('input', () => {
+        row.name = name.value;
+      });
+      wrap.append(name);
+    }
 
     // Parent dropdown, if this step has a parentStep with options.
     if (step.parentStep) {
@@ -276,24 +287,8 @@ export class Wizard {
     del.title = 'Remove';
     wrap.append(del);
 
-    // Optional goal inputs (zone rows): feed the entity's userGoal / orgGoal.
-    if (step.askGoals) {
-      const goals = el('div', { class: 'iso-wizard-goals' });
-      const ug = el('input', {
-        class: 'iso-input iso-input-sm',
-        attrs: { type: 'text', placeholder: 'User goal (optional)' },
-      }) as HTMLInputElement;
-      ug.value = row.userGoal ?? '';
-      ug.addEventListener('input', () => { row.userGoal = ug.value; });
-      const og = el('input', {
-        class: 'iso-input iso-input-sm',
-        attrs: { type: 'text', placeholder: 'Org goal (optional)' },
-      }) as HTMLInputElement;
-      og.value = row.orgGoal ?? '';
-      og.addEventListener('input', () => { row.orgGoal = og.value; });
-      goals.append(ug, og);
-      wrap.append(goals);
-    }
+    // (The zone userGoal/orgGoal inputs were removed with the territory
+    // collapse, 2026-07 — goals are gone from the model.)
 
     return wrap;
   }

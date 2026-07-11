@@ -81,7 +81,11 @@ export interface WizardStep {
   multi: boolean;
   /** id of an earlier step whose entities populate a parent dropdown. */
   parentStep?: StepId;
-  /** Label for the name input on each row. */
+  /**
+   * Label for the name input on each row (and the "+ Add …" button / parent
+   * dropdown fallbacks). Territory steps show NO name input — territories are
+   * unlabeled ground; rows are referred to as "<nameLabel> N".
+   */
   nameLabel: string;
   /** Extra per-row fields beyond name + parent. */
   extraFields?: ExtraField[];
@@ -89,11 +93,6 @@ export interface WizardStep {
   defaultAsset?: string;
   /** For steps offering an asset choice, the selectable asset options. */
   assetOptions?: { value: string; label: string }[];
-  /**
-   * When true, each row gains optional "user goal" / "org goal" inputs that feed
-   * the produced entity's userGoal / orgGoal (zones / whole-services).
-   */
-  askGoals?: boolean;
 }
 
 // Base steps = public-service defaults. resolveSteps() overlays domain skins.
@@ -102,7 +101,7 @@ export const WIZARD_STEPS: WizardStep[] = [
     id: 'domain',
     title: 'Service type',
     prompt: 'What kind of service is this? Your choice tailors the questions.',
-    entityType: 'organisation', // domain is stored on meta, not an entity
+    entityType: 'territory', // domain is stored on meta, not an entity
     multi: false,
     nameLabel: 'Service type',
   },
@@ -110,41 +109,41 @@ export const WIZARD_STEPS: WizardStep[] = [
     id: 'service',
     title: 'Service',
     prompt: 'What service are you mapping? Give it a name and a short description.',
-    entityType: 'organisation', // service title is stored on meta, not an entity
+    entityType: 'territory', // service title is stored on meta, not an entity
     multi: false,
     nameLabel: 'Service name',
   },
+  // The three grouping steps below all lay down unlabeled TERRITORY ground
+  // plates (zone kinds collapsed 2026-07): no names, no goals — just how many
+  // ground areas at each level, and which parent each nests within.
   {
     id: 'organisations',
     title: 'Organisations',
-    prompt: 'Which organisations are involved? Add one per line.',
-    entityType: 'organisation',
+    prompt: 'How many organisations are involved? Add a ground territory for each.',
+    entityType: 'territory',
     multi: true,
     nameLabel: 'Organisation',
-    defaultAsset: 'department-zone',
-    askGoals: true,
+    defaultAsset: 'territory',
   },
   {
     id: 'departments',
     title: 'Departments',
-    prompt: 'Add the departments, choosing which organisation each belongs to.',
-    entityType: 'department',
+    prompt: 'Add a territory per department, choosing which organisation each nests within.',
+    entityType: 'territory',
     multi: true,
     parentStep: 'organisations',
     nameLabel: 'Department',
-    defaultAsset: 'department-zone',
-    askGoals: true,
+    defaultAsset: 'territory',
   },
   {
     id: 'teams',
     title: 'Teams',
-    prompt: 'Add the teams and pick the department each sits within.',
-    entityType: 'team',
+    prompt: 'Add a territory per team and pick the department each sits within.',
+    entityType: 'territory',
     multi: true,
     parentStep: 'departments',
     nameLabel: 'Team',
-    defaultAsset: 'department-zone',
-    askGoals: true,
+    defaultAsset: 'territory',
   },
   {
     id: 'userGroups',

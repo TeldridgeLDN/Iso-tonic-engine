@@ -18,7 +18,7 @@ function baseDoc(): Record<string, unknown> {
 function entity(over: Record<string, unknown>): Record<string, unknown> {
   return {
     id: 'e',
-    type: 'team',
+    type: 'territory',
     label: 'e',
     placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 1, d: 1 } },
     asset: { symbol: 's' },
@@ -60,11 +60,9 @@ describe('validateDocument — accept', () => {
     expect(validateDocument(doc).ok).toBe(true);
   });
 
-  it('accepts userGoal/orgGoal string fields', () => {
-    const doc = baseDoc();
-    doc.entities = [entity({ id: 'a', userGoal: 'apply for a grant', orgGoal: 'process claims' })];
-    expect(validateDocument(doc).ok).toBe(true);
-  });
+  // (The userGoal/orgGoal accept test was deleted with the territory contract:
+  // the fields are gone from the model; stray ones survive only as preserved
+  // unknown fields.)
 });
 
 describe('validateDocument — reject', () => {
@@ -166,13 +164,8 @@ describe('validateDocument — reject', () => {
     if (!res.ok) expect(res.errors.some((e) => e.includes('rotation'))).toBe(true);
   });
 
-  it('rejects non-string userGoal / orgGoal', () => {
-    const doc = baseDoc();
-    doc.entities = [entity({ id: 'a', userGoal: 42 })];
-    const res = validateDocument(doc);
-    expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.errors.some((e) => e.includes('userGoal'))).toBe(true);
-  });
+  // (The non-string userGoal reject test was deleted with the territory
+  // contract: goal validation was removed along with the model fields.)
 });
 
 describe('validateDocument — warnings not errors', () => {

@@ -62,35 +62,21 @@ describe('buildWrittenDescription', () => {
     expect(out.startsWith('My Service\n\nA short description.')).toBe(true);
   });
 
-  it('describes a zone with both goals and its grouped children', () => {
+  // (The "describes a zone with goals/children" and "reports an empty zone"
+  // tests were deleted with the territory contract: zone paragraphs and goal
+  // lines no longer exist in the description output.)
+
+  it('lists people even when parented to a territory', () => {
     const doc = docWith([
-      ent({
-        id: 'org',
-        type: 'organisation',
-        label: 'Acme',
-        userGoal: 'Get served fast',
-        orgGoal: 'Stay profitable',
-      }),
-      ent({ id: 'u1', type: 'user', label: 'Barista — Maya', parentId: 'org' }),
-      ent({ id: 'u2', type: 'user', label: 'Barista — Tom', parentId: 'org' }),
-      ent({ id: 'd1', type: 'digital-infra', label: 'EPOS till', parentId: 'org' }),
+      ent({ id: 'terr', type: 'territory', label: 'Ground' }),
+      ent({ id: 'u1', type: 'user', label: 'Barista — Maya', parentId: 'terr' }),
+      ent({ id: 'u2', type: 'user', label: 'Barista — Tom', parentId: 'terr' }),
     ]);
     const out = buildWrittenDescription(doc);
-    expect(out).toContain('Acme is an organisation.');
-    expect(out).toContain('For the user: Get served fast.');
-    expect(out).toContain('For the organisation: Stay profitable.');
-    // Children grouped by type: users under "staffed by", digital listed.
-    expect(out).toContain('staffed by Barista — Maya and Barista — Tom');
-    expect(out).toContain('digital system: EPOS till');
+    expect(out).toContain('People present: Barista — Maya and Barista — Tom.');
   });
 
-  it('reports an empty zone honestly', () => {
-    const doc = docWith([ent({ id: 'z', type: 'process', label: 'Lonely zone' })]);
-    const out = buildWrittenDescription(doc);
-    expect(out).toContain('It has no items placed within it.');
-  });
-
-  it('groups unparented users by identical label with ×N', () => {
+  it('groups users by identical label with ×N', () => {
     const doc = docWith([
       ent({ id: 'r1', type: 'user', label: 'Takeaway rush' }),
       ent({ id: 'r2', type: 'user', label: 'Takeaway rush' }),
@@ -133,7 +119,7 @@ describe('buildWrittenDescription', () => {
   it('excludes entities on a hidden custom layer', () => {
     const doc = docWith(
       [
-        ent({ id: 'org', type: 'organisation', label: 'Acme' }),
+        ent({ id: 'org', type: 'territory', label: 'Acme' }),
         ent({ id: 'v', type: 'user', label: 'Visible worker', parentId: 'org' }),
         ent({
           id: 'h',
@@ -153,14 +139,13 @@ describe('buildWrittenDescription', () => {
   it('excludes entities on a hidden type layer', () => {
     const doc = docWith(
       [
-        ent({ id: 'org', type: 'organisation', label: 'Acme' }),
-        ent({ id: 'u', type: 'user', label: 'Person', parentId: 'org' }),
+        ent({ id: 'terr', type: 'territory', label: 'Ground' }),
+        ent({ id: 'u', type: 'user', label: 'Person', parentId: 'terr' }),
       ],
       { typeLayerVisibility: { user: false } }
     );
     const out = buildWrittenDescription(doc);
     expect(out).not.toContain('Person');
-    expect(out).toContain('It has no items placed within it.');
   });
 
   it('is deterministic (byte-identical on repeated calls)', () => {
@@ -176,13 +161,67 @@ describe('buildWrittenDescription', () => {
   });
 
   it('produces the expected shape for the Corner Grind fixture', () => {
+    // Post-territory shape: title, one people list (staff + customers, ×N
+    // merged), key questions, layers — no zone paragraphs, no goal lines.
     const out = buildWrittenDescription(loadCornerGrind());
-    expect(out).toContain('The Corner Grind is an organisation.');
-    expect(out).toContain('staffed by Barista — Maya, Barista — Tom, Kitchen — Sam and Owner-manager — Priya');
-    expect(out).toContain('Order → cup is a process zone.');
-    expect(out).toContain('Also present, not tied to any zone: Takeaway rush ×3, Regular ×3, Remote worker ×2 and Delivery driver.');
+    expect(out).toContain('The Corner Grind');
+    expect(out).toContain('People present:');
+    expect(out).toContain('Barista — Maya');
+    expect(out).toContain('Takeaway rush ×3');
     expect(out).toContain('• How do regulars and remote workers share the tables at peak?');
     expect(out).toContain('• Front of house (12 items)');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Contract (territory): exporters carry NO zone sections or zone vocabulary.
+// The Corner Grind fixture still contains raw old-format zones — the exporters
+// must not describe them (zone prose dropped entirely, per spec).
+// ---------------------------------------------------------------------------
+
+describe('exporters — zone sections dropped (territory contract)', () => {
+  it('description contains no zone prose or goal lines for the Corner Grind fixture', () => {
+    const out = buildWrittenDescription(loadCornerGrind());
+    expect(out).not.toContain('is an organisation.');
+    expect(out).not.toContain('is a department.');
+    expect(out).not.toContain('is a process zone.');
+    expect(out).not.toContain('For the user:');
+    expect(out).not.toContain('For the organisation:');
+    expect(out).not.toContain('It has no items placed within it.');
+  });
+
+  it('description still exports people, key questions and layers', () => {
+    const out = buildWrittenDescription(loadCornerGrind());
+    expect(out).toContain('The Corner Grind'); // title
+    expect(out).toContain('Takeaway rush ×3'); // people (now all grouped)
+    expect(out).toContain('Key questions:');
+    expect(out).toContain('• Front of house (12 items)');
+  });
+
+  it('description ignores a territory entity (unlabeled ground, never prose)', () => {
+    const doc = docWith([
+      ent({ id: 'terr', type: 'territory', label: 'Ground 1' }),
+      ent({ id: 'u1', type: 'user', label: 'Visitor', parentId: 'terr' }),
+    ]);
+    const out = buildWrittenDescription(doc);
+    expect(out).not.toContain('Ground 1 is');
+    expect(out).toContain('Visitor');
+  });
+
+  it('legend model has no zone blocks; layers survive', () => {
+    const model = buildLegendModel(loadCornerGrind());
+    expect('zones' in model).toBe(false);
+    expect(model.layers.some((l) => l.startsWith('Front of house'))).toBe(true);
+  });
+
+  it('legend panel renders title + Layers but no zone titles', () => {
+    const doc = loadCornerGrind();
+    const bbox: BBox = { minX: -200, minY: -50, maxX: 300, maxY: 250 };
+    const layout = extendBBoxForLegend(bbox, panelWidth(bbox));
+    const svg = renderLegendPanel(buildLegendModel(doc), layout, bbox);
+    expect(svg).toContain('The Corner Grind'); // title
+    expect(svg).toContain('Layers');
+    expect(svg).not.toContain('Order → cup'); // former zone block heading
   });
 });
 
@@ -253,13 +292,10 @@ describe('extendBBoxForLegend', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildLegendModel + renderLegendPanel', () => {
-  it('models title, description, zones and layers from the fixture', () => {
+  it('models title, description and layers from the fixture (no zone blocks)', () => {
     const model = buildLegendModel(loadCornerGrind());
     expect(model.title).toBe('The Corner Grind');
     expect(model.description).toContain('coffeeshop');
-    const zoneLabels = model.zones.map((z) => z.label);
-    expect(zoneLabels).toContain('The Corner Grind');
-    expect(zoneLabels).toContain('Order → cup');
     expect(model.layers.some((l) => l.startsWith('Front of house'))).toBe(true);
   });
 

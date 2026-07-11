@@ -3,8 +3,10 @@
 //
 // Goals (in priority order):
 //   1. Deterministic: same input document → byte-identical output.
-//   2. Non-overlapping footprints for grid entities.
-//   3. Reasonable semantic grouping (children near parents).
+//   2. Non-overlapping footprints for grid entities (outside containment).
+//   3. Territories are sized to CONTAIN their children: child territories tile
+//      inside the parent (rows of two, one-tile border/gutters); grid
+//      infrastructure sits on a row inside the parent beneath them.
 //
 // It is explicitly NOT trying to be beautiful.
 
@@ -19,12 +21,12 @@ import { tileToScreen } from './iso.ts';
 
 // Tunables -----------------------------------------------------------------
 
-const PLATE_PAD = 1; // tiles of gap between top-level plates
-const ORG_PLATE = { w: 10, d: 8 }; // organisation ground plate size
-const DEPT_PLATE = { w: 8, d: 6 }; // department ground plate size
-const TEAM_ZONE = { w: 3, d: 3 }; // team zone inside a department
-const PROCESS_ZONE = { w: 3, d: 2 }; // process dotted zone
-const INFRA_FOOT = { w: 1, d: 1 }; // infra footprint
+const PLATE_PAD = 1; // tiles of gap between top-level territories
+const LEAF = { w: 3, d: 3 }; // childless territory footprint
+const BORDER = 1; // interior border inside a territory
+const GUTTER = 1; // gap between nested siblings
+const COLS = 2; // child territories per interior row
+const INFRA_PITCH = 2; // x-pitch between 1×1 infra items on their row
 const SPARE_ROW_GAP = 2; // gap before the unparented spare row
 
 // Deterministic pseudo-random --------------------------------------------
@@ -74,154 +76,145 @@ interface Working {
   placement?: GridPlacement | FreePlacement;
 }
 
+interface Size {
+  w: number;
+  d: number;
+}
+
 /**
  * Compute a fresh, deterministic placement for every entity.
  * Returns a new SceneDocument (input not mutated).
  */
 export function autoLayout(doc: SceneDocument): SceneDocument {
-  // Stable ordering: sort ids for deterministic iteration independent of the
-  // caller's array order? No — we must preserve entity array order in output
-  // for structural stability, but placement *computation* iterates in a fixed
-  // id-sorted order so plate positions don't depend on input ordering.
+  // Placement computation iterates in a fixed id-sorted order so positions
+  // don't depend on input array ordering; the output preserves array order.
   const working = new Map<string, Working>();
   for (const e of doc.entities) working.set(e.id, { entity: e });
 
   const idsSorted = [...working.keys()].sort();
-  const grids = new Map<string, GridPlacement>(); // id → grid zone (for anchoring children)
+  const entityOf = (id: string): Entity => working.get(id)!.entity;
 
-  // Cursor for tiling top-level plates left-to-right.
+  const isTerritory = (e: Entity): boolean => e.type === 'territory';
+  const isGridInfra = (e: Entity): boolean =>
+    e.type === 'physical-infra' || e.type === 'digital-infra';
+
+  // --- territory tree -------------------------------------------------------
+  // Children maps in id-sorted order; roots = territories whose parent is not
+  // a territory in this document (absent or dangling parents count as roots).
+  const childTerrs = new Map<string, string[]>();
+  const gridKids = new Map<string, string[]>();
+  const roots: string[] = [];
+  for (const id of idsSorted) {
+    const e = entityOf(id);
+    if (isTerritory(e)) {
+      const parent = e.parentId ? byId(doc, e.parentId) : undefined;
+      if (parent && isTerritory(parent)) {
+        childTerrs.set(parent.id, [...(childTerrs.get(parent.id) ?? []), id]);
+      } else {
+        roots.push(id);
+      }
+    } else if (isGridInfra(e) && e.parentId) {
+      const parent = byId(doc, e.parentId);
+      if (parent && isTerritory(parent)) {
+        gridKids.set(parent.id, [...(gridKids.get(parent.id) ?? []), id]);
+      }
+    }
+  }
+
+  // --- bottom-up territory sizing (memoised, cycle-safe) --------------------
+  const sizes = new Map<string, Size>();
+  const sizing = new Set<string>();
+  const sizeOf = (id: string): Size => {
+    const memo = sizes.get(id);
+    if (memo) return memo;
+    if (sizing.has(id)) return LEAF; // parentId cycle → degrade to a leaf
+    sizing.add(id);
+
+    const kids = childTerrs.get(id) ?? [];
+    const infraCount = (gridKids.get(id) ?? []).length;
+
+    let innerW = 0;
+    let innerH = 0;
+    for (let i = 0; i < kids.length; i += COLS) {
+      const row = kids.slice(i, i + COLS).map(sizeOf);
+      const rowW = row.reduce((acc, s) => acc + s.w, 0) + (row.length - 1) * GUTTER;
+      const rowH = Math.max(...row.map((s) => s.d));
+      innerW = Math.max(innerW, rowW);
+      innerH += (innerH > 0 ? GUTTER : 0) + rowH;
+    }
+    if (infraCount > 0) {
+      innerW = Math.max(innerW, infraCount * INFRA_PITCH - 1);
+      innerH += (innerH > 0 ? GUTTER : 0) + 1; // one row of 1×1 items
+    }
+
+    const size: Size = {
+      w: Math.max(LEAF.w, innerW + 2 * BORDER),
+      d: Math.max(LEAF.d, innerH + 2 * BORDER),
+    };
+    sizing.delete(id);
+    sizes.set(id, size);
+    return size;
+  };
+
+  // --- recursive placement: territory + its interior ------------------------
+  const grids = new Map<string, GridPlacement>(); // id → placed grid (anchors)
+  const placeTerritory = (id: string, x: number, y: number): void => {
+    const size = sizeOf(id);
+    const g = grid(x, y, size.w, size.d);
+    working.get(id)!.placement = g;
+    grids.set(id, g);
+
+    // Child territories: rows of COLS inside the border.
+    const kids = childTerrs.get(id) ?? [];
+    let cy = y + BORDER;
+    for (let i = 0; i < kids.length; i += COLS) {
+      const row = kids.slice(i, i + COLS);
+      let cx = x + BORDER;
+      let rowH = 0;
+      for (const kid of row) {
+        const ks = sizeOf(kid);
+        placeTerritory(kid, cx, cy);
+        cx += ks.w + GUTTER;
+        rowH = Math.max(rowH, ks.d);
+      }
+      cy += rowH + GUTTER;
+    }
+
+    // Grid infrastructure: one row of 1×1 items beneath the nested rows.
+    const infra = gridKids.get(id) ?? [];
+    infra.forEach((kidId, j) => {
+      const g2 = grid(x + BORDER + j * INFRA_PITCH, cy, 1, 1);
+      working.get(kidId)!.placement = g2;
+      grids.set(kidId, g2);
+    });
+  };
+
+  // --- Pass 1: top-level territories tiled left-to-right --------------------
   let plateCursorX = 0;
-  const plateRowY = 0;
-
-  const isType = (e: Entity, ...types: Entity['type'][]): boolean =>
-    types.includes(e.type);
-
-  const isTopLevel = (e: Entity): boolean =>
-    !e.parentId || byId(doc, e.parentId) === undefined;
-
-  // --- Pass 1: top-level organisations & departments become ground plates ---
-  for (const id of idsSorted) {
-    const e = working.get(id)!.entity;
-    if (!isType(e, 'organisation', 'department')) continue;
-    if (!isTopLevel(e)) continue;
-
-    const size = e.type === 'organisation' ? ORG_PLATE : DEPT_PLATE;
-    const g = grid(plateCursorX, plateRowY, size.w, size.d);
-    working.get(id)!.placement = g;
-    grids.set(id, g);
-    plateCursorX += size.w + PLATE_PAD;
+  for (const id of roots) {
+    placeTerritory(id, plateCursorX, 0);
+    plateCursorX += sizeOf(id).w + PLATE_PAD;
   }
 
-  // --- Pass 2: departments parented to an organisation → plate inside org row ---
-  // Place them to the right of the org plate band, tiled per-parent.
-  const childPlateCursor = new Map<string, number>(); // parentId → next local x offset
-  for (const id of idsSorted) {
-    const e = working.get(id)!.entity;
-    if (e.type !== 'department') continue;
-    if (isTopLevel(e)) continue; // already placed in pass 1
-
-    const parentGrid = e.parentId ? grids.get(e.parentId) : undefined;
-    if (!parentGrid) {
-      // Parent isn't a placed grid — treat as top-level plate.
-      const g = grid(plateCursorX, plateRowY, DEPT_PLATE.w, DEPT_PLATE.d);
-      working.get(id)!.placement = g;
-      grids.set(id, g);
-      plateCursorX += DEPT_PLATE.w + PLATE_PAD;
-      continue;
-    }
-    // Stack departments below the org plate, tiled left-to-right.
-    const local = childPlateCursor.get(e.parentId!) ?? 0;
-    const g = grid(
-      parentGrid.x + local,
-      parentGrid.y + parentGrid.footprint.d + PLATE_PAD,
-      DEPT_PLATE.w,
-      DEPT_PLATE.d
-    );
-    working.get(id)!.placement = g;
-    grids.set(id, g);
-    childPlateCursor.set(e.parentId!, local + DEPT_PLATE.w + PLATE_PAD);
+  // Bottom edge of everything placed so far (tile space), for the bands below.
+  let maxBottom = 0;
+  for (const g of grids.values()) {
+    maxBottom = Math.max(maxBottom, g.y + g.footprint.d);
   }
 
-  // --- Pass 3: teams → smaller zones inside their parent department plate ---
-  const teamCursor = new Map<string, { col: number; row: number }>();
-  for (const id of idsSorted) {
-    const e = working.get(id)!.entity;
-    if (e.type !== 'team') continue;
-
-    const parentGrid = e.parentId ? grids.get(e.parentId) : undefined;
-    if (!parentGrid) {
-      // Unparented team → its own small plate on the top row.
-      const g = grid(plateCursorX, plateRowY, TEAM_ZONE.w, TEAM_ZONE.d);
-      working.get(id)!.placement = g;
-      grids.set(id, g);
-      plateCursorX += TEAM_ZONE.w + PLATE_PAD;
-      continue;
-    }
-    const cursor = teamCursor.get(e.parentId!) ?? { col: 0, row: 0 };
-    const perRow = Math.max(
-      1,
-      Math.floor(parentGrid.footprint.w / (TEAM_ZONE.w + 1))
-    );
-    const gx = parentGrid.x + 1 + cursor.col * (TEAM_ZONE.w + 1);
-    const gy = parentGrid.y + 1 + cursor.row * (TEAM_ZONE.d + 1);
-    const g = grid(gx, gy, TEAM_ZONE.w, TEAM_ZONE.d);
-    working.get(id)!.placement = g;
-    grids.set(id, g);
-
-    let nextCol = cursor.col + 1;
-    let nextRow = cursor.row;
-    if (nextCol >= perRow) {
-      nextCol = 0;
-      nextRow += 1;
-    }
-    teamCursor.set(e.parentId!, { col: nextCol, row: nextRow });
-  }
-
-  // --- Pass 4: infra (physical/digital) placed adjacent to parent zone ------
-  const infraCursor = new Map<string, number>();
+  // --- Pass 2: grid infra with no territory parent → spare band -------------
+  const looseInfraY = maxBottom + SPARE_ROW_GAP;
   let looseInfraX = 0;
-  const looseInfraY = ORG_PLATE.d + DEPT_PLATE.d + SPARE_ROW_GAP; // below plates
   for (const id of idsSorted) {
-    const e = working.get(id)!.entity;
-    if (!isType(e, 'physical-infra', 'digital-infra')) continue;
-
-    const parentGrid = e.parentId ? grids.get(e.parentId) : undefined;
-    if (!parentGrid) {
-      const g = grid(looseInfraX, looseInfraY, INFRA_FOOT.w, INFRA_FOOT.d);
-      working.get(id)!.placement = g;
-      looseInfraX += INFRA_FOOT.w + 1;
-      continue;
-    }
-    // Tile infra along the bottom edge just outside the parent zone.
-    const n = infraCursor.get(e.parentId!) ?? 0;
-    const g = grid(
-      parentGrid.x + n * (INFRA_FOOT.w + 1),
-      parentGrid.y + parentGrid.footprint.d, // one row past the zone's far edge
-      INFRA_FOOT.w,
-      INFRA_FOOT.d
-    );
-    working.get(id)!.placement = g;
-    infraCursor.set(e.parentId!, n + 1);
+    const e = entityOf(id);
+    if (!isGridInfra(e) || working.get(id)!.placement) continue;
+    working.get(id)!.placement = grid(looseInfraX, looseInfraY, 1, 1);
+    looseInfraX += INFRA_PITCH;
   }
 
-  // --- Pass 5: processes → dotted zones in a dedicated band below the map ----
-  // Contract wants them "between the teams they parent to"; to keep the layout
-  // deterministic AND collision-free (team/dept plates are densely packed),
-  // all processes live in their own band, tiled left-to-right. Kept adjacent
-  // in x to their parent's plate where one exists, else appended in order.
-  const looseProcessY = looseInfraY + INFRA_FOOT.d + SPARE_ROW_GAP;
-  let looseProcessX = 0;
+  // --- Pass 3: users (figurines) free-placed near parent, seeded scatter ----
   for (const id of idsSorted) {
-    const e = working.get(id)!.entity;
-    if (e.type !== 'process') continue;
-    const g = grid(looseProcessX, looseProcessY, PROCESS_ZONE.w, PROCESS_ZONE.d);
-    working.get(id)!.placement = g;
-    looseProcessX += PROCESS_ZONE.w + PLATE_PAD;
-  }
-
-  // --- Pass 6: users (figurines) free-placed near parent, seeded scatter ----
-  for (const id of idsSorted) {
-    const e = working.get(id)!.entity;
+    const e = entityOf(id);
     if (e.type !== 'user') continue;
 
     const parentGrid = e.parentId ? grids.get(e.parentId) : undefined;
@@ -233,7 +226,7 @@ export function autoLayout(doc: SceneDocument): SceneDocument {
       baseY = c.y;
     } else {
       // Deterministic spot in a scatter band below everything.
-      const c = tileToScreen(0, looseProcessY + PROCESS_ZONE.d + 2);
+      const c = tileToScreen(0, looseInfraY + 2);
       baseX = c.x;
       baseY = c.y;
     }
@@ -245,7 +238,7 @@ export function autoLayout(doc: SceneDocument): SceneDocument {
     );
   }
 
-  // --- Pass 7: annotations placed above the top of the map ------------------
+  // --- Pass 4: annotations placed above the top of the map ------------------
   // Compute the min screen-y over all placed grid/free entities, then stack
   // annotations above it, tiled left-to-right deterministically.
   let minScreenY = 0;
@@ -266,14 +259,14 @@ export function autoLayout(doc: SceneDocument): SceneDocument {
   const annoTop = minScreenY - 80;
   let annoIndex = 0;
   for (const id of idsSorted) {
-    const e = working.get(id)!.entity;
+    const e = entityOf(id);
     if (e.type !== 'annotation') continue;
     working.get(id)!.placement = free(annoIndex * 220, annoTop);
     annoIndex += 1;
   }
 
   // --- Fallback: any entity still unplaced → spare row at the bottom --------
-  const spareY = looseProcessY + PROCESS_ZONE.d + 6;
+  const spareY = looseInfraY + 1 + SPARE_ROW_GAP;
   let spareX = 0;
   for (const id of idsSorted) {
     const w = working.get(id)!;

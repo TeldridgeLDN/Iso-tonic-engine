@@ -1,19 +1,19 @@
 // Legend / map-key panel for exports (Defra whole-services "key" panel).
 // Pure string/data transforms — no DOM, unit-tested in node. The panel is a
 // white field appended to the RIGHT of the map, separated by a thin INK rule,
-// containing: map title, doc description, per-zone blocks (label + child labels
-// grouped by type), and a Layers list. Text is the contract's Helvetica dialect,
-// INK ink; ACCENT is used ONLY for the title rule.
+// containing: map title, doc description, and a Layers list. Text is the
+// contract's Helvetica dialect, INK ink; ACCENT is used ONLY for the title rule.
+// (The former per-zone blocks were dropped when zone kinds collapsed into
+// unlabeled territories, 2026-07.)
 //
 // Node cannot measure text, so wrapping is a simple greedy character-count wrap.
 // The export bbox/page maths are extended here so the panel always sits inside
 // the viewBox / page and is never cropped.
 
-import type { Entity, EntityType, SceneDocument } from '../core/model.ts';
-import { childrenOf, isEntityVisible } from '../core/model.ts';
+import type { SceneDocument } from '../core/model.ts';
 import { INK, ACCENT, FONT } from '../assets/style.ts';
 import type { BBox } from './svg-prep.ts';
-import { isZone, visibleEntities } from './description.ts';
+import { visibleEntities } from './description.ts';
 
 // --- Panel geometry constants ----------------------------------------------
 
@@ -24,20 +24,8 @@ export const PANEL_MAX_W = 420;
 export const TITLE_SIZE = 16;
 export const BODY_SIZE = 11;
 export const LINE_H = 15; // line advance for body text
-export const ZONE_TITLE_SIZE = 12;
+export const SECTION_TITLE_SIZE = 12;
 export const WRAP_COLS = 38; // ~chars per line at font-size 11 (greedy wrap)
-
-const TYPE_NOUN_PL: Record<EntityType, string> = {
-  user: 'People',
-  team: 'Teams',
-  process: 'Processes',
-  department: 'Departments',
-  organisation: 'Organisations',
-  'physical-infra': 'Physical',
-  'digital-infra': 'Digital',
-  annotation: 'Notes',
-  route: 'Routes',
-};
 
 // --- Panel width -------------------------------------------------------------
 
@@ -88,28 +76,14 @@ export function wrapText(text: string, cols: number = WRAP_COLS): string[] {
 
 // --- Legend content model ----------------------------------------------------
 
-export interface LegendZoneBlock {
-  label: string;
-  /** grouped child lines, e.g. "People: Barista — Maya, Barista — Tom". */
-  childLines: string[];
-}
-
 export interface LegendModel {
   title: string;
   description: string;
-  zones: LegendZoneBlock[];
   layers: string[];
 }
 
 /** Derive the legend content model from a document (visible entities only). */
 export function buildLegendModel(doc: SceneDocument): LegendModel {
-  const zones = visibleEntities(doc)
-    .filter(isZone)
-    .map((zone) => ({
-      label: zone.label || '(unlabelled)',
-      childLines: zoneChildLines(doc, zone.id),
-    }));
-
   const layers = doc.layers.map((layer) => {
     const count = visibleEntities(doc).filter((e) =>
       e.customLayers?.includes(layer.id)
@@ -120,41 +94,8 @@ export function buildLegendModel(doc: SceneDocument): LegendModel {
   return {
     title: doc.meta.title || 'Untitled map',
     description: doc.meta.description ?? '',
-    zones,
     layers,
   };
-}
-
-function zoneChildLines(doc: SceneDocument, zoneId: string): string[] {
-  const children = childrenOf(doc, zoneId).filter(
-    (e) => isEntityVisible(doc, e) && e.type !== 'annotation'
-  );
-  const byType = new Map<EntityType, Entity[]>();
-  for (const child of children) {
-    const list = byType.get(child.type) ?? [];
-    list.push(child);
-    byType.set(child.type, list);
-  }
-  const lines: string[] = [];
-  for (const [type, list] of byType) {
-    const labels = mergeLabels(list);
-    lines.push(`${TYPE_NOUN_PL[type]}: ${labels.join(', ')}`);
-  }
-  return lines;
-}
-
-function mergeLabels(entities: Entity[]): string[] {
-  const counts = new Map<string, number>();
-  const order: string[] = [];
-  for (const e of entities) {
-    const label = e.label || '(unlabelled)';
-    if (!counts.has(label)) order.push(label);
-    counts.set(label, (counts.get(label) ?? 0) + 1);
-  }
-  return order.map((l) => {
-    const n = counts.get(l) ?? 1;
-    return n > 1 ? `${l} ×${n}` : l;
-  });
 }
 
 // --- Extended bbox / page maths ---------------------------------------------
@@ -260,22 +201,9 @@ export function renderLegendPanel(
     cy += 6;
   }
 
-  // Zone blocks.
-  for (const zone of model.zones) {
-    parts.push(textEl(textX, cy, ZONE_TITLE_SIZE, 'bold', zone.label));
-    cy += LINE_H;
-    for (const childLine of zone.childLines) {
-      for (const line of wrapText(childLine, WRAP_COLS)) {
-        parts.push(textEl(textX + 8, cy, BODY_SIZE, 'normal', line));
-        cy += LINE_H;
-      }
-    }
-    cy += 6;
-  }
-
   // Layers.
   if (model.layers.length > 0) {
-    parts.push(textEl(textX, cy, ZONE_TITLE_SIZE, 'bold', 'Layers'));
+    parts.push(textEl(textX, cy, SECTION_TITLE_SIZE, 'bold', 'Layers'));
     cy += LINE_H;
     for (const layer of model.layers) {
       parts.push(textEl(textX + 8, cy, BODY_SIZE, 'normal', layer));

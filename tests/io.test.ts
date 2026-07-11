@@ -255,7 +255,7 @@ function docWithNode(): SceneDocument {
     entities: [
       {
         id: 'n1',
-        type: 'process',
+        type: 'territory',
         label: 'Node One',
         placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 1, d: 1 } },
         asset: { symbol: 'server-rack' },
