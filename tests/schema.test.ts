@@ -256,6 +256,88 @@ describe('validateDocument — warnings not errors', () => {
   });
 });
 
+function routeEntity(over: Record<string, unknown>): Record<string, unknown> {
+  return {
+    id: 'r',
+    type: 'route',
+    label: 'r',
+    placement: { mode: 'free', x: 0, y: 0 },
+    asset: { symbol: 'route-path', params: { stops: [{ x: 0, y: 0 }] } },
+    ...over,
+  };
+}
+
+describe('validateDocument — route entities', () => {
+  it('accepts a well-formed route (entity + free stops)', () => {
+    const doc = baseDoc();
+    doc.entities = [
+      entity({ id: 'a', type: 'user' }),
+      routeEntity({
+        asset: {
+          symbol: 'route-path',
+          params: { stops: [{ entityId: 'a' }, { x: 10, y: 20 }] },
+        },
+      }),
+    ];
+    expect(validateDocument(doc).ok).toBe(true);
+  });
+
+  it('rejects a route whose asset.symbol is not "route-path"', () => {
+    const doc = baseDoc();
+    doc.entities = [routeEntity({ asset: { symbol: 'not-a-route', params: { stops: [{ x: 0, y: 0 }] } } })];
+    const res = validateDocument(doc);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.errors.some((e) => e.includes('route-path'))).toBe(true);
+  });
+
+  it('rejects a route with non-array stops', () => {
+    const doc = baseDoc();
+    doc.entities = [routeEntity({ asset: { symbol: 'route-path', params: { stops: 'nope' } } })];
+    const res = validateDocument(doc);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.errors.some((e) => e.includes('stops must be an array'))).toBe(true);
+  });
+
+  it('rejects a route with zero stops', () => {
+    const doc = baseDoc();
+    doc.entities = [routeEntity({ asset: { symbol: 'route-path', params: { stops: [] } } })];
+    const res = validateDocument(doc);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.errors.some((e) => e.includes('at least one stop'))).toBe(true);
+  });
+
+  it('rejects a malformed stop shape', () => {
+    const doc = baseDoc();
+    doc.entities = [
+      routeEntity({ asset: { symbol: 'route-path', params: { stops: [{ x: 1 }, { foo: 'bar' }] } } }),
+    ];
+    const res = validateDocument(doc);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.errors.some((e) => e.includes('stops[0]') || e.includes('stops[1]'))).toBe(true);
+  });
+
+  it('warns (not rejects) on a stop referencing a missing entity', () => {
+    const doc = baseDoc();
+    doc.entities = [
+      routeEntity({ asset: { symbol: 'route-path', params: { stops: [{ entityId: 'ghost' }] } } }),
+    ];
+    const res = validateDocument(doc);
+    expect(res.ok).toBe(true);
+    expect(res.warnings.some((w) => w.includes('missing entity "ghost"'))).toBe(true);
+  });
+
+  it('warns (not rejects) on a stop referencing another route', () => {
+    const doc = baseDoc();
+    doc.entities = [
+      routeEntity({ id: 'r1', asset: { symbol: 'route-path', params: { stops: [{ entityId: 'r2' }] } } }),
+      routeEntity({ id: 'r2', asset: { symbol: 'route-path', params: { stops: [{ x: 0, y: 0 }] } } }),
+    ];
+    const res = validateDocument(doc);
+    expect(res.ok).toBe(true);
+    expect(res.warnings.some((w) => w.includes('another route "r2"'))).toBe(true);
+  });
+});
+
 describe('unknown-field preservation through migrate + validate', () => {
   it('preserves unknown top-level and entity fields', () => {
     const doc = baseDoc();

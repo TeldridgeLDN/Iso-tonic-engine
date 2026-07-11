@@ -8,7 +8,9 @@ import {
   isEntityVisible,
   footprintsOverlap,
   effectiveFootprint,
+  resolveRouteStops,
 } from '../src/core/model.ts';
+import { tileToScreen } from '../src/core/iso.ts';
 import type {
   SceneDocument,
   Entity,
@@ -21,6 +23,19 @@ function ent(partial: Partial<Entity> & { id: string; type: Entity['type'] }): E
     placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 1, d: 1 } },
     asset: { symbol: 'x' },
     ...partial,
+  };
+}
+
+function route(
+  id: string,
+  stops: Array<{ entityId: string } | { x: number; y: number }>
+): Entity {
+  return {
+    id,
+    type: 'route',
+    label: id,
+    placement: { mode: 'free', x: 0, y: 0 },
+    asset: { symbol: 'route-path', params: { stops } },
   };
 }
 
@@ -273,5 +288,103 @@ describe('spotlightSet', () => {
     const s = spotlightSet(cyc, 'a');
     expect(s.has('a')).toBe(true);
     expect(s.has('b')).toBe(true);
+  });
+
+  // --- route linkage ---
+
+  it('lights a focal route’s stop entities (route → stops)', () => {
+    const d = docWith([
+      ent({ id: 'a', type: 'user' }),
+      ent({ id: 'b', type: 'process' }),
+      ent({ id: 'unrelated', type: 'team' }),
+      route('r', [{ entityId: 'a' }, { entityId: 'b' }]),
+    ]);
+    const s = spotlightSet(d, 'r');
+    expect(s.has('r')).toBe(true); // self
+    expect(s.has('a')).toBe(true);
+    expect(s.has('b')).toBe(true);
+    expect(s.has('unrelated')).toBe(false);
+  });
+
+  it('lights every route that lists the focal entity as a stop (entity → routes)', () => {
+    const d = docWith([
+      ent({ id: 'a', type: 'user' }),
+      ent({ id: 'b', type: 'process' }),
+      route('r1', [{ entityId: 'a' }]),
+      route('r2', [{ entityId: 'b' }, { entityId: 'a' }]),
+      route('r3', [{ entityId: 'b' }]),
+    ]);
+    const s = spotlightSet(d, 'a');
+    expect(s.has('r1')).toBe(true);
+    expect(s.has('r2')).toBe(true);
+    expect(s.has('r3')).toBe(false); // does not list a
+  });
+
+  it('does not transit through routes (focal entity → route → other stop stays dark)', () => {
+    const d = docWith([
+      ent({ id: 'a', type: 'user' }),
+      ent({ id: 'b', type: 'process' }),
+      route('r', [{ entityId: 'a' }, { entityId: 'b' }]),
+    ]);
+    // Focal a lights route r, but NOT r's other stop b.
+    const s = spotlightSet(d, 'a');
+    expect(s.has('r')).toBe(true);
+    expect(s.has('b')).toBe(false);
+  });
+});
+
+describe('resolveRouteStops', () => {
+  it('resolves grid entity stops via tileToScreen and free stops via their coords', () => {
+    const d = docWith([
+      ent({
+        id: 'g',
+        type: 'user',
+        placement: { mode: 'grid', x: 2, y: 3, footprint: { w: 1, d: 1 } },
+      }),
+      ent({
+        id: 'f',
+        type: 'process',
+        placement: { mode: 'free', x: 100, y: 200 },
+      }),
+      route('r', [{ entityId: 'g' }, { x: 7, y: 9 }, { entityId: 'f' }]),
+    ]);
+    const pts = resolveRouteStops(d, byId(d, 'r')!);
+    const g = tileToScreen(2, 3);
+    expect(pts).toEqual([
+      { x: g.x, y: g.y, entityId: 'g' },
+      { x: 7, y: 9 },
+      { x: 100, y: 200, entityId: 'f' },
+    ]);
+  });
+
+  it('skips dangling and route-referencing stops, preserving order', () => {
+    const d = docWith([
+      ent({ id: 'a', type: 'user', placement: { mode: 'free', x: 1, y: 2 } }),
+      ent({ id: 'b', type: 'user', placement: { mode: 'free', x: 3, y: 4 } }),
+      route('other', [{ entityId: 'a' }]),
+      route('r', [
+        { entityId: 'a' },
+        { entityId: 'ghost' }, // dangling → skip
+        { entityId: 'other' }, // references a route → skip
+        { entityId: 'b' },
+      ]),
+    ]);
+    const pts = resolveRouteStops(d, byId(d, 'r')!);
+    expect(pts).toEqual([
+      { x: 1, y: 2, entityId: 'a' },
+      { x: 3, y: 4, entityId: 'b' },
+    ]);
+  });
+
+  it('returns [] for a route with malformed/absent stops', () => {
+    const d = docWith([
+      ent({
+        id: 'r',
+        type: 'route',
+        placement: { mode: 'free', x: 0, y: 0 },
+        asset: { symbol: 'route-path' }, // no params
+      }),
+    ]);
+    expect(resolveRouteStops(d, byId(d, 'r')!)).toEqual([]);
   });
 });

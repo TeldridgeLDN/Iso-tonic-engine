@@ -160,6 +160,12 @@ export function validateDocument(input: unknown): ValidateResult {
     collectOverlapWarnings(raw.entities, warnings);
   }
 
+  // Route stops whose entityId is dangling or points at another route are
+  // warnings (like footprint overlap), not rejections.
+  if (Array.isArray(raw.entities)) {
+    collectRouteRefWarnings(raw.entities, entityIds, warnings);
+  }
+
   if (errors.length > 0) {
     return { ok: false, errors, warnings };
   }
@@ -226,6 +232,11 @@ function validateEntity(
     errors.push(`entities[${i}].asset.symbol must be a string`);
   }
 
+  // route entities carry a route-path asset with a stops array (structural).
+  if (ent.type === 'route') {
+    validateRoute(ent, i, errors);
+  }
+
   // userGoal / orgGoal (optional strings)
   if (ent.userGoal !== undefined && typeof ent.userGoal !== 'string') {
     errors.push(`entities[${i}].userGoal must be a string`);
@@ -273,6 +284,52 @@ function validatePlacement(
       `entities[${i}].placement.mode must be "grid" or "free" (got ${JSON.stringify(mode)})`
     );
   }
+}
+
+/**
+ * Route entities must carry an asset with symbol "route-path" and a stops
+ * array where each stop is either {entityId: string} or {x, y: finite numbers}.
+ * These are structural problems, so they REJECT (consistent with placement /
+ * type checks). Dangling / route-referencing stops are handled separately as
+ * warnings (see collectRouteRefWarnings), mirroring footprint-overlap warnings.
+ */
+function validateRoute(
+  ent: Record<string, unknown>,
+  i: number,
+  errors: string[]
+): void {
+  const asset = ent.asset;
+  if (!isObject(asset)) return; // asset shape already reported above
+  if (asset.symbol !== 'route-path') {
+    errors.push(
+      `entities[${i}].asset.symbol must be "route-path" for route entities`
+    );
+  }
+  const params = asset.params;
+  if (!isObject(params) || !Array.isArray(params.stops)) {
+    errors.push(`entities[${i}].asset.params.stops must be an array`);
+    return;
+  }
+  const stops = params.stops;
+  if (stops.length < 1) {
+    errors.push(
+      `entities[${i}].asset.params.stops must have at least one stop`
+    );
+  }
+  stops.forEach((stop, j) => {
+    if (!isValidStop(stop)) {
+      errors.push(
+        `entities[${i}].asset.params.stops[${j}] must be {entityId} or {x, y}`
+      );
+    }
+  });
+}
+
+/** A stop is an entity ref ({entityId: string}) or a free point ({x, y}). */
+function isValidStop(stop: unknown): boolean {
+  if (!isObject(stop)) return false;
+  if (typeof stop.entityId === 'string') return true;
+  return isFiniteNumber(stop.x) && isFiniteNumber(stop.y);
 }
 
 /** rotation, when present, must be an integer in {0,1,2,3}. */
@@ -414,6 +471,55 @@ function isAncestorOf(
     cur = parentOf.get(cur);
   }
   return false;
+}
+
+// ---------------------------------------------------------------------------
+// Route reference warnings
+// ---------------------------------------------------------------------------
+
+/**
+ * For each route entity, a stop whose entityId references a missing entity, or
+ * references another route, is a WARNING (not a rejection) — mirroring how
+ * footprint overlaps are treated. Free stops and well-formed entity stops are
+ * silent. Structural stop problems are handled as errors in validateRoute.
+ */
+function collectRouteRefWarnings(
+  rawEntities: unknown[],
+  entityIds: Set<string>,
+  warnings: string[]
+): void {
+  const typeOf = new Map<string, string>();
+  for (const ent of rawEntities) {
+    if (
+      isObject(ent) &&
+      typeof ent.id === 'string' &&
+      typeof ent.type === 'string'
+    ) {
+      typeOf.set(ent.id, ent.type);
+    }
+  }
+
+  rawEntities.forEach((ent, i) => {
+    if (!isObject(ent) || ent.type !== 'route') return;
+    const asset = ent.asset;
+    if (!isObject(asset) || !isObject(asset.params)) return;
+    const stops = asset.params.stops;
+    if (!Array.isArray(stops)) return;
+    const label = typeof ent.id === 'string' ? ent.id : String(i);
+    stops.forEach((stop, j) => {
+      if (!isObject(stop) || typeof stop.entityId !== 'string') return;
+      const ref = stop.entityId;
+      if (!entityIds.has(ref)) {
+        warnings.push(
+          `route "${label}" stop[${j}] references missing entity "${ref}"`
+        );
+      } else if (typeOf.get(ref) === 'route') {
+        warnings.push(
+          `route "${label}" stop[${j}] references another route "${ref}"`
+        );
+      }
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------
