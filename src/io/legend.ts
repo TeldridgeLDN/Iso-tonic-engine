@@ -33,6 +33,7 @@ const TYPE_NOUN_PL: Record<EntityType, string> = {
   process: 'Processes',
   department: 'Departments',
   organisation: 'Organisations',
+  territory: 'Territories',
   'physical-infra': 'Physical',
   'digital-infra': 'Digital',
   annotation: 'Notes',

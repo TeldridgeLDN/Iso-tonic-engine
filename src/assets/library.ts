@@ -3,7 +3,7 @@
 
 import { renderFigurine } from './figurine.ts';
 import { renderBuilding } from './building.ts';
-import { renderZone, renderProcessZone } from './zones.ts';
+import { renderZone, renderProcessZone, renderTerritory } from './zones.ts';
 import {
   roadStraight,
   roadCorner,
@@ -26,6 +26,7 @@ export type EntityType =
   | 'process'
   | 'department'
   | 'organisation'
+  | 'territory'
   | 'physical-infra'
   | 'digital-infra'
   | 'annotation';
@@ -90,6 +91,12 @@ const zoneSchema: ParamField[] = [
   { key: 'label', label: 'Title', kind: 'text' },
   { key: 'number', label: 'Plaque number', kind: 'number', min: 0, max: 999 },
   { key: 'userGroups', label: 'User groups (comma-separated)', kind: 'text' },
+];
+
+// Territory: an unlabeled ground plate. Only w/d, resizable up to 100×100.
+const territorySchema: ParamField[] = [
+  { key: 'w', label: 'Width (tiles)', kind: 'number', min: 1, max: 100 },
+  { key: 'd', label: 'Depth (tiles)', kind: 'number', min: 1, max: 100 },
 ];
 
 const shopSchema: ParamField[] = [
@@ -205,6 +212,9 @@ const HAND_ASSETS: AssetDef[] = [
   { id: 'department-zone', category: 'department', ground: true, render: renderZone, paramSchema: zoneSchema },
   { id: 'process-zone', category: 'process', ground: true, render: renderProcessZone, paramSchema: zoneSchema },
 
+  // Territory (unlabeled ground plate; expand step of the zone → territory migration)
+  { id: 'territory', category: 'territory', footprint: { w: 3, d: 3 }, ground: true, render: renderTerritory, paramSchema: territorySchema },
+
   // Annotation
   { id: 'callout', category: 'annotation', render: renderCallout, paramSchema: calloutSchema },
 ];
@@ -219,6 +229,7 @@ const CATEGORIES: ReadonlySet<AssetDef['category']> = new Set<AssetDef['category
   'process',
   'department',
   'organisation',
+  'territory',
   'physical-infra',
   'digital-infra',
   'annotation',

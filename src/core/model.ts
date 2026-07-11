@@ -17,6 +17,7 @@ export type EntityType =
   | 'process'
   | 'department'
   | 'organisation'
+  | 'territory'
   | 'physical-infra'
   | 'digital-infra'
   | 'annotation'
@@ -130,6 +131,7 @@ export const ALL_ENTITY_TYPES: readonly EntityType[] = [
   'process',
   'department',
   'organisation',
+  'territory',
   'physical-infra',
   'digital-infra',
   'annotation',

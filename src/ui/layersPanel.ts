@@ -22,6 +22,7 @@ const TYPE_LABELS: Record<EntityType, string> = {
   process: 'Processes',
   department: 'Departments',
   organisation: 'Organisations',
+  territory: 'Territories',
   'physical-infra': 'Physical infra',
   'digital-infra': 'Digital infra',
   annotation: 'Annotations',

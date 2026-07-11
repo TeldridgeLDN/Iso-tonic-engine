@@ -69,6 +69,18 @@ export function renderZone(params?: Record<string, unknown>): string {
   return group(0, 0, frags);
 }
 
+/**
+ * Territory ground plate: dashed ink outline diamond + invisible interior
+ * hit-area, and NOTHING else. Unlabeled by design — no plaque, no title, no
+ * text (label/number/userGroups params are ignored). This is the unlabeled
+ * variant of renderZone: same outline + hit-area, all text drawing removed.
+ */
+export function renderTerritory(params?: Record<string, unknown>): string {
+  const w = num(params?.w, 3);
+  const d = num(params?.d, 3);
+  return group(0, 0, [zoneHitArea(w, d), isoDiamondOutline(w, d, '6 4', INK, STROKE)]);
+}
+
 /** Process zone: dotted outline diamond + corner label. */
 export function renderProcessZone(params?: Record<string, unknown>): string {
   const p = normalize(params);

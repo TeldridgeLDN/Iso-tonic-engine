@@ -35,6 +35,7 @@ const TERRAIN_IDS = new Set<string>([
 // Display order + labels for the category-driven palette groups. The terrain
 // section is injected separately (see renderList) since it spans categories.
 const GROUPS: { category: AssetDef['category']; label: string }[] = [
+  { category: 'territory', label: 'Territory' },
   { category: 'organisation', label: 'Organisations' },
   { category: 'department', label: 'Departments' },
   { category: 'process', label: 'Processes' },

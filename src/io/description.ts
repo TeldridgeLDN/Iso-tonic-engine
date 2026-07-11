@@ -25,6 +25,7 @@ const TYPE_NOUN: Record<EntityType, string> = {
   process: 'process zone',
   department: 'department',
   organisation: 'organisation',
+  territory: 'territory',
   'physical-infra': 'physical item',
   'digital-infra': 'digital system',
   annotation: 'annotation',
