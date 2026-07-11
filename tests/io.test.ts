@@ -4,12 +4,16 @@ import {
   stripEditorOnly,
   computeBBox,
   assembleSvg,
+  assembleSvgWithMeta,
+  metadataBlock,
   exportDimensions,
   parseTranslate,
   parsePointsAttr,
   parsePathCoords,
   EXPORT_MARGIN,
 } from '../src/io/svg-prep.ts';
+import { buildExportSvg } from '../src/io/export.ts';
+import { fileNameFor } from '../src/io/persistence.ts';
 import {
   setupAutosave,
   checkAutosave,
@@ -185,6 +189,126 @@ describe('assembleSvg / exportDimensions', () => {
     const svg = assembleSvg('', null);
     expect(svg).toContain('<svg');
     expect(svg).toContain('fill="#FFFFFF"');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// accessibility metadata + legend-aware assembly
+// ---------------------------------------------------------------------------
+
+describe('metadataBlock', () => {
+  it('emits title/desc and XML-escapes their text', () => {
+    const block = metadataBlock('A & B <x>', 'desc > "q"');
+    expect(block).toBe('<title>A &amp; B &lt;x&gt;</title><desc>desc &gt; "q"</desc>');
+  });
+
+  it('emits empty elements for empty strings (stable order for AT)', () => {
+    expect(metadataBlock('', '')).toBe('<title></title><desc></desc>');
+  });
+});
+
+describe('assembleSvgWithMeta', () => {
+  it('injects title/desc as the first children, before the bg and fragment', () => {
+    const bbox = { minX: 0, minY: 0, maxX: 10, maxY: 10 };
+    const svg = assembleSvgWithMeta('<polygon points="0,0"/>', bbox, {
+      title: 'My map',
+      desc: 'Two nodes',
+    });
+    const titleIdx = svg.indexOf('<title>My map</title>');
+    const rectIdx = svg.indexOf('<rect');
+    const fragIdx = svg.indexOf('<polygon');
+    expect(titleIdx).toBeGreaterThan(-1);
+    expect(titleIdx).toBeLessThan(rectIdx);
+    expect(rectIdx).toBeLessThan(fragIdx);
+  });
+
+  it('drives the viewBox from extendedBBox when supplied (legend never cropped)', () => {
+    const bbox = { minX: 0, minY: 0, maxX: 10, maxY: 10 };
+    const extendedBBox = { minX: 0, minY: 0, maxX: 100, maxY: 10 };
+    const svg = assembleSvgWithMeta('<polygon points="0,0"/>', bbox, {
+      extendedBBox,
+      legendFragment: '<g id="legend"></g>',
+    });
+    const m = EXPORT_MARGIN;
+    expect(svg).toContain(`viewBox="${-m} ${-m} ${100 + 2 * m} ${10 + 2 * m}"`);
+    // legend fragment is drawn last, after the scene fragment.
+    expect(svg.indexOf('<polygon')).toBeLessThan(svg.indexOf('<g id="legend">'));
+  });
+
+  it('degrades gracefully for a null bbox', () => {
+    const svg = assembleSvgWithMeta('', null, { title: 't', desc: 'd' });
+    expect(svg).toContain('<svg');
+    expect(svg).toContain('<title>t</title>');
+    expect(svg).toContain('fill="#FFFFFF"');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildExportSvg — end-to-end pure prep (render → strip → bbox → assemble).
+// Exercises the real renderer; no canvas / jsPDF (those live in exportPNG/PDF).
+// ---------------------------------------------------------------------------
+
+function docWithNode(): SceneDocument {
+  const doc = createEmptyDocument('Export Me', '2026-07-05T00:00:00.000Z');
+  return {
+    ...doc,
+    entities: [
+      {
+        id: 'n1',
+        type: 'process',
+        label: 'Node One',
+        placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 1, d: 1 } },
+        asset: { symbol: 'server-rack' },
+      },
+    ],
+  };
+}
+
+describe('buildExportSvg', () => {
+  it('produces a self-contained SVG with title/desc metadata and a bbox', () => {
+    const { svg, bbox, width, height } = buildExportSvg(docWithNode());
+    expect(svg.startsWith('<svg')).toBe(true);
+    expect(svg.endsWith('</svg>')).toBe(true);
+    expect(svg).toContain('xmlns="http://www.w3.org/2000/svg"');
+    expect(svg).toContain('<title>Export Me</title>');
+    expect(svg).toContain('<desc>');
+    expect(bbox).not.toBeNull();
+    expect(width).toBeGreaterThan(0);
+    expect(height).toBeGreaterThan(0);
+  });
+
+  it('strips editor-only content from the exported SVG', () => {
+    const { svg } = buildExportSvg(docWithNode());
+    expect(svg).not.toContain('data-editor-only');
+  });
+
+  it('falls back to "Untitled map" title when meta.title is empty', () => {
+    const doc = { ...docWithNode(), meta: { ...docWithNode().meta, title: '' } };
+    const { svg } = buildExportSvg(doc);
+    expect(svg).toContain('<title>Untitled map</title>');
+  });
+
+  it('legend option grows the export dimensions (panel kept inside viewBox)', () => {
+    const doc = docWithNode();
+    const plain = buildExportSvg(doc);
+    const withLegend = buildExportSvg(doc, { legend: true });
+    expect(withLegend.width).toBeGreaterThan(plain.width);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// persistence filename derivation (pure)
+// ---------------------------------------------------------------------------
+
+describe('fileNameFor', () => {
+  it('kebab-cases the title and appends .iso.json', () => {
+    const doc = createEmptyDocument('Demo Service Map', '2026-07-05T00:00:00.000Z');
+    expect(fileNameFor(doc)).toBe('demo-service-map.iso.json');
+  });
+
+  it('falls back to "untitled" for a symbol-only / empty title', () => {
+    const doc = createEmptyDocument('!!!', '2026-07-05T00:00:00.000Z');
+    expect(fileNameFor(doc)).toBe('untitled.iso.json');
   });
 });
 
