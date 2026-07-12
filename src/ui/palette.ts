@@ -258,6 +258,12 @@ export class Palette {
     item.append(thumbWrap, caption);
 
     item.addEventListener('click', () => {
+      // Swap-sprite mode: the click replaces the armed entity's asset instead of
+      // starting a placement (rejection + hint handled by performSwap).
+      if (this.ctx.isSwapArmed()) {
+        this.ctx.performSwap(asset.id);
+        return;
+      }
       const req: PlacementRequest = {
         assetId: asset.id,
         entityType: entityTypeFor(asset.category),

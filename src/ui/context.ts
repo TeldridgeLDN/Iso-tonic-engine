@@ -37,6 +37,23 @@ export interface AppContext {
   cancelPlacement(): void;
 
   /**
+   * Swap-sprite mode: arm the given (swappable) entity so the NEXT palette
+   * click replaces its asset instead of starting a placement. Cancelled by Esc,
+   * by selecting a different entity, or by a completed swap.
+   */
+  beginAssetSwap(entityId: string): void;
+  /** Cancel armed swap mode (no-op if not armed). */
+  cancelAssetSwap(): void;
+  /** True while swap mode is armed (palette routes clicks to performSwap). */
+  isSwapArmed(): boolean;
+  /**
+   * Perform the armed swap onto the given palette asset id. Rejects (with a
+   * hint) an incompatible target or an overlapping result; on success swaps,
+   * exits swap mode, and keeps the entity selected.
+   */
+  performSwap(assetId: string): void;
+
+  /**
    * Rotate the currently-selected entity one quarter-turn clockwise, with the
    * same collision-rejection feedback as a bad drop. No-op for fixed assets.
    * Shared by the R key and the properties-panel rotate button.

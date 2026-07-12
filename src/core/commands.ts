@@ -8,6 +8,7 @@ import type {
   CustomLayer,
   Placement,
   GridPlacement,
+  AssetRef,
   FigurineParams,
   EntityType,
 } from './model.ts';
@@ -139,6 +140,63 @@ export class MoveEntity implements Command {
     if (!this.prev) throw new Error('MoveEntity: invert before apply');
     const prev = this.prev;
     return mapEntity(doc, this.id, (ent) => ({ ...ent, placement: prev }));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SwapAsset
+// ---------------------------------------------------------------------------
+
+/**
+ * Replace an entity's ASSET (symbol + params) and, for grid entities, its
+ * placement footprint/rotation — while retaining every entity-level field
+ * (id, label, description, parentId, customLayers, placement origin). Mirrors
+ * MoveEntity's capture/invert pattern: captures the prior asset AND placement at
+ * apply-time so a single undo restores them exactly (including whether params /
+ * rotation were present at all — `next*` are supplied fully-formed by the caller,
+ * so an absent key is simply absent).
+ *
+ * The command is dumb: the swap resolver (render/swap.ts) computes the target
+ * footprint, carried-over params, and rotation, then hands the fully-formed
+ * `nextAsset` / `nextPlacement` here. Routes/annotations that reference this
+ * entity by id keep working because the id is never touched.
+ */
+export class SwapAsset implements Command {
+  label = 'Swap asset';
+  private prevAsset?: AssetRef;
+  private prevPlacement?: Placement;
+  private readonly id: string;
+  private readonly nextAsset: AssetRef;
+  private readonly nextPlacement: Placement;
+
+  constructor(args: {
+    entityId: string;
+    nextAsset: AssetRef;
+    nextPlacement: Placement;
+  }) {
+    this.id = args.entityId;
+    this.nextAsset = args.nextAsset;
+    this.nextPlacement = args.nextPlacement;
+  }
+
+  apply(doc: SceneDocument): SceneDocument {
+    const e = requireEntity(doc, this.id);
+    this.prevAsset = e.asset;
+    this.prevPlacement = e.placement;
+    return mapEntity(doc, this.id, (ent) => ({
+      ...ent,
+      asset: this.nextAsset,
+      placement: this.nextPlacement,
+    }));
+  }
+
+  invert(doc: SceneDocument): SceneDocument {
+    if (!this.prevAsset || !this.prevPlacement) {
+      throw new Error('SwapAsset: invert before apply');
+    }
+    const asset = this.prevAsset;
+    const placement = this.prevPlacement;
+    return mapEntity(doc, this.id, (ent) => ({ ...ent, asset, placement }));
   }
 }
 

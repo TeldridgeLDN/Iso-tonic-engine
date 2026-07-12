@@ -19,6 +19,7 @@ import {
 } from '../core/commands.ts';
 import { getAsset, type ParamField } from '../assets/library.ts';
 import { isResizable, resizeBounds, sizeParamKeys } from '../render/resize.ts';
+import { isSwappableEntity } from '../render/swap.ts';
 import { removeLastStop, routeStopCount } from './routeBuilder.ts';
 import type { AppContext } from './context.ts';
 import { el, button, field, clear } from './dom.ts';
@@ -96,6 +97,10 @@ export class PropertiesPanel {
     // Resize toggle — only for resizable zones.
     const resize = this.resizeControl(entity);
     if (resize) this.body.append(resize);
+
+    // Swap-sprite button — only for swappable (grid-placed, non-route) entities.
+    const swap = this.swapControl(entity);
+    if (swap) this.body.append(swap);
 
     // Param editor / figurine editor
     if (isFigurine(entity)) {
@@ -211,6 +216,28 @@ export class PropertiesPanel {
       'Toggle the resize tool. While on, dragging this zone changes its size. ' +
       'Shift+drag or the corner handle work any time.';
     return field('Size', btn);
+  }
+
+  /**
+   * "Swap sprite" button — replaces the entity's asset with another from the
+   * palette while keeping all metadata + origin. Shown only for swappable
+   * (grid-placed, non-route) entities. Clicking arms swap mode; the label
+   * reflects the armed state and a second click cancels.
+   */
+  private swapControl(entity: Entity): HTMLElement | null {
+    const def = getAsset(entity.asset.symbol);
+    if (!isSwappableEntity(entity, def)) return null;
+
+    const armed = this.ctx.isSwapArmed();
+    const btn = button(
+      armed ? '⇄ Swap sprite: pick a palette asset' : '⇄ Swap sprite',
+      () => this.ctx.beginAssetSwap(entity.id),
+      `iso-btn iso-btn-sm iso-swap-btn${armed ? ' iso-btn-armed' : ''}`
+    );
+    btn.title =
+      'Replace this sprite with another asset, keeping its label, links, and position. ' +
+      'Click, then pick an asset in the palette. Esc cancels.';
+    return field('Sprite', btn);
   }
 
   private parentField(entity: Entity): HTMLElement {

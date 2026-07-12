@@ -6,13 +6,14 @@
 
 import type { Camera, Entity, GridPlacement, Placement, SceneDocument } from './core/model.ts';
 import { byId } from './core/model.ts';
-import { History, RotateEntity, DeleteEntity, CompoundCommand } from './core/commands.ts';
+import { History, RotateEntity, DeleteEntity, CompoundCommand, SwapAsset } from './core/commands.ts';
 import { planRotation } from './render/rotation.ts';
+import { resolveSwap, swapOverlaps } from './render/swap.ts';
 import { presentSpotlight } from './render/spotlight.ts';
 import { renderScene, type ViewState } from './render/renderer.ts';
 import { isResizable } from './render/resize.ts';
 import { backfillSizeParams } from './render/docMigrate.ts';
-import { getAsset } from './assets/library.ts';
+import { getAsset, isGroundAsset } from './assets/library.ts';
 import { defaultCamera, screenToWorld, viewBoxAttr, viewBoxFor } from './render/camera.ts';
 import {
   InteractionController,
@@ -54,6 +55,8 @@ export class App implements AppContext {
   private hoverId: string | undefined;
   private camera: Camera;
   private ghost: Ghost | undefined;
+  // Swap-sprite mode: the entity whose asset the next palette click replaces.
+  private swapEntityId: string | undefined;
   private placement!: PlacementController;
   private readonly routeBuilder = new RouteBuilder();
   private routeSeq = 0;
@@ -142,6 +145,10 @@ export class App implements AppContext {
 
   /** Replace the selection with a single entity (or clear when undefined). */
   private setSelection(id: string | undefined): void {
+    // Selecting a different entity (or clearing) cancels armed swap mode.
+    if (this.swapEntityId !== undefined && id !== this.swapEntityId) {
+      this.swapEntityId = undefined;
+    }
     this.selection.clear();
     if (id) this.selection.add(id);
     this.selectionPrimary = id;
@@ -244,6 +251,70 @@ export class App implements AppContext {
     this.svg?.classList.remove('is-placing');
     this.palette?.clearActive();
     this.render();
+  }
+
+  // --- swap-sprite mode ---------------------------------------------------
+
+  isSwapArmed(): boolean {
+    return this.swapEntityId !== undefined;
+  }
+
+  beginAssetSwap(entityId: string): void {
+    if (this.viewer) return;
+    // Toggle off if re-arming the same entity.
+    if (this.swapEntityId === entityId) {
+      this.cancelAssetSwap();
+      return;
+    }
+    // Swap mode and placement mode are mutually exclusive.
+    this.placement.cancel();
+    this.svg?.classList.remove('is-placing');
+    this.palette?.clearActive();
+    this.swapEntityId = entityId;
+    this.showToast('Swap sprite: click an asset in the palette. Esc cancels.');
+    this.notifySelection();
+    this.render();
+  }
+
+  cancelAssetSwap(): void {
+    if (this.swapEntityId === undefined) return;
+    this.swapEntityId = undefined;
+    this.notifySelection();
+    this.render();
+  }
+
+  performSwap(assetId: string): void {
+    const id = this.swapEntityId;
+    if (id === undefined) return;
+    const entity = byId(this.history.document, id);
+    if (!entity) {
+      this.cancelAssetSwap();
+      return;
+    }
+    const fromDef = getAsset(entity.asset.symbol);
+    const toDef = getAsset(assetId);
+    const resolution = resolveSwap(entity, fromDef, toDef);
+    if (!resolution) {
+      this.showToast('Cannot swap to that asset — incompatible type.');
+      return; // stay armed so the user can pick a compatible asset
+    }
+    if (
+      swapOverlaps(entity, resolution.nextPlacement, this.history.document, (e) =>
+        isGroundAsset(e)
+      )
+    ) {
+      this.showToast('Cannot swap here — the new footprint overlaps another entity.');
+      return;
+    }
+    this.swapEntityId = undefined;
+    this.history.execute(
+      new SwapAsset({
+        entityId: id,
+        nextAsset: resolution.nextAsset,
+        nextPlacement: resolution.nextPlacement,
+      })
+    );
+    this.select(id); // keep the entity selected; panel refreshes
   }
 
   replaceDocument(doc: SceneDocument): void {
@@ -646,6 +717,10 @@ export class App implements AppContext {
       return;
     }
     if (evt.key === 'Escape') {
+      if (this.isSwapArmed()) {
+        this.cancelAssetSwap();
+        return;
+      }
       if (this.placement.active) {
         this.cancelPlacement();
         return;
