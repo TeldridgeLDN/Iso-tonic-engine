@@ -4,6 +4,8 @@ import {
   byId,
   childrenOf,
   semanticRelatives,
+  ancestorsOf,
+  descendantsOf,
   spotlightSet,
   isEntityVisible,
   footprintsOverlap,
@@ -115,6 +117,17 @@ describe('semanticRelatives', () => {
     const ids = semanticRelatives(cyc, 'a').map((e) => e.id);
     expect(ids).toContain('a');
     expect(ids).toContain('b');
+  });
+
+  it('ancestorsOf returns the parent chain nearest-first, excluding self', () => {
+    expect(ancestorsOf(d, 'team').map((e) => e.id)).toEqual(['dept', 'org']);
+    expect(ancestorsOf(d, 'org')).toEqual([]); // root has no ancestors
+  });
+
+  it('descendantsOf returns transitive children, excluding self', () => {
+    expect(new Set(descendantsOf(d, 'dept').map((e) => e.id))).toEqual(
+      new Set(['team', 'team2', 'user'])
+    );
   });
 });
 

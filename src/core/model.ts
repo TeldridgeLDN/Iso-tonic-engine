@@ -245,6 +245,16 @@ export function descendantsOf(doc: SceneDocument, id: string): Entity[] {
 }
 
 /**
+ * Transitive parents (ancestors) of an entity, excluding the entity itself,
+ * ordered nearest-first. Cycle-safe. Exposes the private parent-walk used by
+ * semanticRelatives so callers (e.g. journeyFocusSet) can light the containing
+ * territory plates of a focal entity.
+ */
+export function ancestorsOf(doc: SceneDocument, id: string): Entity[] {
+  return transitiveParents(doc, id);
+}
+
+/**
  * Transitive children of an entity (excluding the entity itself).
  * Guards against cycles.
  */

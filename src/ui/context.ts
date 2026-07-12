@@ -81,4 +81,26 @@ export interface AppContext {
    * finish or "Load demo". Rewires subscriptions and refits the camera.
    */
   replaceDocument(doc: SceneDocument): void;
+
+  // --- Journeys view-state (route hide / focus) --------------------------
+  // Pure VIEW state: none of these mutate the document, touch the schema, or
+  // create an undo entry. They drive the renderer's hiddenRouteIds / spotlight.
+
+  /** Is this journey (route entity id) currently toggled off in the panel? */
+  isRouteHidden(routeId: string): boolean;
+  /** Toggle a journey's visibility (hides its line + badges + label). */
+  toggleRouteHidden(routeId: string): void;
+  /** The journey currently focused (all non-members dimmed), or undefined. */
+  focusedRouteId(): string | undefined;
+  /**
+   * Focus a journey: keep it, its stop entities, their ancestors and their
+   * descendants at full opacity; dim the rest. Re-focusing the same journey
+   * clears focus; focusing a hidden journey unhides it first. One at a time.
+   */
+  focusJourney(routeId: string): void;
+  /**
+   * Subscribe to Journeys view-state changes (hide/focus, incl. Esc-clear).
+   * Returns an unsubscribe fn. Distinct from `subscribe` (document changes).
+   */
+  onViewStateChange(listener: () => void): () => void;
 }

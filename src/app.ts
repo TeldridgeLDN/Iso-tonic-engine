@@ -9,7 +9,7 @@ import { byId } from './core/model.ts';
 import { History, RotateEntity, DeleteEntity, CompoundCommand, SwapAsset } from './core/commands.ts';
 import { planRotation } from './render/rotation.ts';
 import { resolveSwap, swapOverlaps } from './render/swap.ts';
-import { presentSpotlight } from './render/spotlight.ts';
+import { presentSpotlight, journeyFocusSet } from './render/spotlight.ts';
 import { renderScene, type ViewState } from './render/renderer.ts';
 import { isResizable } from './render/resize.ts';
 import { backfillSizeParams } from './render/docMigrate.ts';
@@ -52,6 +52,11 @@ export class App implements AppContext {
   private selectionPrimary: string | undefined;
   private spotlight: string | undefined;
   private spotlightLayerId: string | undefined;
+  // Journeys view-state (route hide / focus). Pure view: never mutates the doc
+  // and never touches history, so toggling leaves undo untouched.
+  private readonly hiddenRoutes = new Set<string>();
+  private focusRouteId: string | undefined;
+  private readonly viewStateListeners: (() => void)[] = [];
   private hoverId: string | undefined;
   private camera: Camera;
   private ghost: Ghost | undefined;
@@ -324,6 +329,9 @@ export class App implements AppContext {
     this.camera = healed.camera ? { ...healed.camera } : defaultCamera();
     this.clearSelection();
     this.spotlight = undefined;
+    // New document: old route ids are meaningless — drop any hide/focus state.
+    this.hiddenRoutes.clear();
+    this.focusRouteId = undefined;
     this.ghost = undefined;
     this.routeBuilder.reset();
     this.placement = this.makePlacementController();
@@ -335,6 +343,66 @@ export class App implements AppContext {
     this.fitToContent();
     this.notifySelection();
     this.render();
+  }
+
+  // --- Journeys view-state (route hide / focus) --------------------------
+
+  isRouteHidden(routeId: string): boolean {
+    return this.hiddenRoutes.has(routeId);
+  }
+
+  toggleRouteHidden(routeId: string): void {
+    if (this.hiddenRoutes.has(routeId)) {
+      this.hiddenRoutes.delete(routeId);
+    } else {
+      this.hiddenRoutes.add(routeId);
+      // Hiding the focused journey clears focus (can't focus what's not drawn).
+      if (this.focusRouteId === routeId) this.focusRouteId = undefined;
+    }
+    this.notifyViewState();
+    this.render();
+  }
+
+  focusedRouteId(): string | undefined {
+    return this.focusRouteId;
+  }
+
+  focusJourney(routeId: string): void {
+    if (this.focusRouteId === routeId) {
+      this.focusRouteId = undefined; // re-focus the same journey → clear
+    } else {
+      this.focusRouteId = routeId;
+      this.hiddenRoutes.delete(routeId); // focusing a hidden journey unhides it
+    }
+    this.notifyViewState();
+    this.render();
+  }
+
+  onViewStateChange(listener: () => void): () => void {
+    this.viewStateListeners.push(listener);
+    return () => {
+      const i = this.viewStateListeners.indexOf(listener);
+      if (i >= 0) this.viewStateListeners.splice(i, 1);
+    };
+  }
+
+  private notifyViewState(): void {
+    for (const l of this.viewStateListeners) l();
+  }
+
+  /**
+   * The focused route id if it still resolves to a route entity, else undefined
+   * (self-healing: a focus left dangling by a delete is dropped so an empty
+   * journeyFocusSet never dims the whole scene).
+   */
+  private activeFocusRouteId(): string | undefined {
+    if (this.focusRouteId === undefined) return undefined;
+    const e = byId(this.history.document, this.focusRouteId);
+    if (!e || e.type !== 'route') {
+      this.focusRouteId = undefined;
+      return undefined;
+    }
+    return this.focusRouteId;
   }
 
   // --- DOM construction ---------------------------------------------------
@@ -465,13 +533,20 @@ export class App implements AppContext {
       resizeHandleFor: this.resizeHandlePlacement(renderDoc),
     };
 
-    if (this.mode === 'present') {
+    // Journey focus (works in BOTH edit and present) takes precedence over the
+    // present-mode entity/layer spotlight; when no journey is focused, present
+    // mode falls back to its usual spotlight and edit mode has none.
+    const focusId = this.activeFocusRouteId();
+    if (focusId) {
+      view.spotlightIds = journeyFocusSet(this.history.document, focusId);
+    } else if (this.mode === 'present') {
       // Layer spotlight (custom-layer group) wins over a single-entity spotlight.
       view.spotlightIds = presentSpotlight(this.history.document, {
         layerId: this.spotlightLayerId,
         entityId: this.spotlight,
       });
     }
+    if (this.hiddenRoutes.size > 0) view.hiddenRouteIds = this.hiddenRoutes;
 
     renderScene(this.sceneRoot, renderDoc, view);
 
@@ -658,6 +733,9 @@ export class App implements AppContext {
     this.clearSelection();
     this.spotlight = undefined;
     this.spotlightLayerId = undefined;
+    // Journey focus is a spotlight overlay too — clear it with the others.
+    this.focusRouteId = undefined;
+    this.notifyViewState();
     this.tooltip.hidden = true;
     this.cancelPlacement();
     this.notifySelection();
@@ -734,6 +812,13 @@ export class App implements AppContext {
       }
       // Cancel an in-progress resize/move drag before clearing selection.
       if (this.controller?.cancelDrag()) return;
+      // Escape clears an active journey focus before falling through.
+      if (this.focusRouteId !== undefined) {
+        this.focusRouteId = undefined;
+        this.notifyViewState();
+        this.render();
+        return;
+      }
       // Escape also returns to the select tool (SimCity convention).
       if (this.tool !== 'select') {
         this.setTool('select');

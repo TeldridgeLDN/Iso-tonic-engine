@@ -7,9 +7,9 @@
 // keep it simple (no diffing).
 
 import type { Entity, GridPlacement, SceneDocument } from '../core/model.ts';
-import { isEntityVisible, resolveRouteStops } from '../core/model.ts';
+import { byId, isEntityVisible, resolveRouteStops } from '../core/model.ts';
 import { sortForRender } from '../core/depth.ts';
-import { tileToScreen } from '../core/iso.ts';
+import { footprintBaseBBox, tileToScreen } from '../core/iso.ts';
 import { getAsset, isGroundAsset } from '../assets/library.ts';
 import { INK, PAPER, ACCENT } from '../assets/style.ts';
 import { circle, text } from '../assets/primitives.ts';
@@ -36,6 +36,13 @@ export interface ViewState {
    * effective footprint, inside a data-editor-only group (never exported).
    */
   resizeHandleFor?: GridPlacement;
+  /**
+   * Route entity ids the user has toggled OFF in the Journeys panel. Their whole
+   * <g> (line + badges + label) is skipped. View-only: never mutates the doc.
+   * Fan-out lanes are still reserved for hidden routes (computeRouteFanout sees
+   * the full document), so visible routes keep stable numbering and positions.
+   */
+  hiddenRouteIds?: Set<string>;
 }
 
 const DIM = 0.15; // DIM_OPACITY per style contract
@@ -96,6 +103,7 @@ const BADGE_R = 9; // step-badge radius (and pill half-height) in world px
 const BADGE_CHAR_W = 5.5; // approx advance per glyph at size 9 bold, world px
 const BADGE_PAD_X = 5; // horizontal padding each side of the pill text
 const BADGE_MIDDOT = '·'; // separator in compound "r·s" badges
+const BADGE_DROP_GAP = 4; // few-px clearance below the footprint south corner
 
 // --- shared-stop fan-out ---------------------------------------------------
 
@@ -110,6 +118,11 @@ type RouteFanout = Map<string, Array<{ dx: number; dy: number }>>;
 /** The type 'route' entities of a document, in document order. */
 function routeEntities(doc: SceneDocument): Entity[] {
   return doc.entities.filter((e) => e.type === 'route');
+}
+
+/** A route toggled off in the Journeys panel (view-only hide). */
+function isRouteHidden(view: ViewState, e: Entity): boolean {
+  return e.type === 'route' && (view.hiddenRouteIds?.has(e.id) ?? false);
 }
 
 /** Rendered pill width (world px) for a badge label — grows to fit the text. */
@@ -199,6 +212,24 @@ function computeRouteFanout(doc: SceneDocument): RouteFanout {
  * With fewer than two resolvable waypoints no path is drawn; with none, only
  * the (empty) wrapper <g> is emitted.
  */
+/**
+ * Downward world-px offset that moves an entity-anchored stop's BADGE from the
+ * anchor (the footprint's north/back vertex, where the path converges) to just
+ * below the footprint's south/front corner, clear of the sprite art.
+ *
+ * The anchor y equals footprintBaseBBox(...).y (the north vertex), so dropping
+ * by the box height `h` (= HALF_H·(w+d) via the projection) lands on the south
+ * corner; +BADGE_R sits the badge fully beneath it and +BADGE_DROP_GAP adds a
+ * small clearance. Free waypoints and free-placed anchored entities (no
+ * footprint) return 0 — their badge stays on the vertex, as before.
+ */
+function badgeDrop(doc: SceneDocument, entityId: string | undefined): number {
+  if (entityId === undefined) return 0;
+  const target = byId(doc, entityId);
+  if (!target || target.placement.mode !== 'grid') return 0;
+  return footprintBaseBBox(target.placement).h + BADGE_R + BADGE_DROP_GAP;
+}
+
 function renderRoute(
   entity: Entity,
   doc: SceneDocument,
@@ -217,16 +248,19 @@ function renderRoute(
   const routeIndex = routes.findIndex((e) => e.id === entity.id); // 0-based
 
   const offsets = fanout.get(entity.id) ?? [];
-  const stops = resolveRouteStops(doc, entity).map((p, i) => ({
+  const resolved = resolveRouteStops(doc, entity);
+  const stops = resolved.map((p, i) => ({
     x: p.x + (offsets[i]?.dx ?? 0),
     y: p.y + (offsets[i]?.dy ?? 0),
   }));
 
   const frags: string[] = [];
+  // The PATH threads the anchor points; only entity-anchored BADGES drop below
+  // the sprite so the converging lines stay legible (badges no longer overlap).
   if (stops.length >= 2) frags.push(routePath(stops));
   stops.forEach((p, i) => {
     const label = multi ? `${routeIndex + 1}${BADGE_MIDDOT}${i + 1}` : String(i + 1);
-    frags.push(routeBadge(p.x, p.y, label, multi));
+    frags.push(routeBadge(p.x, p.y + badgeDrop(doc, resolved[i].entityId), label, multi));
   });
   if (stops.length >= 1) {
     const origin = entityOrigin(entity);
@@ -391,7 +425,9 @@ export function renderScene(
 
   if (view.showGrid) parts.push(renderGridDots(doc));
 
-  const visible = doc.entities.filter((e) => isEntityVisible(doc, e));
+  const visible = doc.entities.filter(
+    (e) => isEntityVisible(doc, e) && !isRouteHidden(view, e)
+  );
   const ordered = sortForRender(visible, isGroundAsset); // ground plates → scene → annotations
   const fanout = computeRouteFanout(doc);
 
@@ -430,7 +466,9 @@ function renderResizeHandle(placement: GridPlacement): string {
 export function renderSceneToString(doc: SceneDocument, view: ViewState = {}): string {
   const parts: string[] = [];
   if (view.showGrid) parts.push(renderGridDots(doc));
-  const visible = doc.entities.filter((e) => isEntityVisible(doc, e));
+  const visible = doc.entities.filter(
+    (e) => isEntityVisible(doc, e) && !isRouteHidden(view, e)
+  );
   const fanout = computeRouteFanout(doc);
   for (const entity of sortForRender(visible, isGroundAsset))
     parts.push(renderEntity(entity, doc, view, fanout));

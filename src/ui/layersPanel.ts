@@ -35,11 +35,13 @@ export class LayersPanel {
   private readonly ctx: AppContext;
   private readonly typeList: HTMLElement;
   private readonly customList: HTMLElement;
+  private readonly journeyList: HTMLElement;
 
   constructor(ctx: AppContext) {
     this.ctx = ctx;
     this.typeList = el('div', { class: 'iso-layer-list' });
     this.customList = el('div', { class: 'iso-layer-list' });
+    this.journeyList = el('div', { class: 'iso-layer-list' });
 
     const addBtn = button('+ Add layer', () => this.addLayer(), 'iso-btn iso-btn-sm');
 
@@ -52,15 +54,21 @@ export class LayersPanel {
         addBtn,
       ]),
       this.customList,
+      el('h3', { class: 'iso-subhead', text: 'Journeys' }),
+      this.journeyList,
     ]);
 
+    // Document changes re-render everything; hide/focus are view-only and arrive
+    // via onViewStateChange (they never touch history, so `subscribe` won't fire).
     ctx.subscribe(() => this.render());
+    ctx.onViewStateChange(() => this.renderJourneys());
     this.render();
   }
 
   private render(): void {
     this.renderTypeLayers();
     this.renderCustomLayers();
+    this.renderJourneys();
   }
 
   private renderTypeLayers(): void {
@@ -121,6 +129,42 @@ export class LayersPanel {
 
       row.append(eye, name, del);
       this.customList.append(row);
+    }
+  }
+
+  /**
+   * Journeys section: one row per type:'route' entity with a visibility eye
+   * (hide its line + badges + label) and a focus button (◎, fade everything
+   * else). Both are pure VIEW-state toggles on the App — no command, no doc
+   * mutation, undo history untouched.
+   */
+  private renderJourneys(): void {
+    clear(this.journeyList);
+    const doc = this.ctx.document();
+    const routes = doc.entities.filter((e) => e.type === 'route');
+    if (routes.length === 0) {
+      this.journeyList.append(
+        el('p', { class: 'iso-empty', text: 'No journeys yet.' })
+      );
+      return;
+    }
+    const focused = this.ctx.focusedRouteId();
+    for (const r of routes) {
+      const hidden = this.ctx.isRouteHidden(r.id);
+      const row = el('div', { class: 'iso-layer-row' });
+      if (hidden) row.classList.add('is-hidden');
+
+      const eye = eyeToggle(!hidden, () => this.ctx.toggleRouteHidden(r.id));
+      const name = el('span', { class: 'iso-layer-name', text: r.label });
+
+      const focusBtn = button('◎', () => this.ctx.focusJourney(r.id), 'iso-icon-btn');
+      const isFocused = focused === r.id;
+      focusBtn.title = isFocused ? 'Clear focus' : 'Focus this journey';
+      focusBtn.setAttribute('aria-pressed', String(isFocused));
+      focusBtn.classList.toggle('is-active', isFocused);
+
+      row.append(eye, name, focusBtn);
+      this.journeyList.append(row);
     }
   }
 

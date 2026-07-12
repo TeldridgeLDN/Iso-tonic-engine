@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { presentSpotlight } from '../src/render/spotlight.ts';
+import { presentSpotlight, journeyFocusSet } from '../src/render/spotlight.ts';
 import { createEmptyDocument, spotlightSet } from '../src/core/model.ts';
-import type { Entity, SceneDocument } from '../src/core/model.ts';
+import type { Entity, RouteStop, SceneDocument } from '../src/core/model.ts';
 
 function ent(partial: Partial<Entity> & { id: string; type: Entity['type'] }): Entity {
   return {
@@ -75,5 +75,56 @@ describe('presentSpotlight', () => {
   it('entity spotlight for a missing focal id yields an empty set', () => {
     const d = docWith([ent({ id: 'a', type: 'territory' })]);
     expect(presentSpotlight(d, { entityId: 'ghost' })).toEqual(new Set<string>());
+  });
+});
+
+function route(id: string, stops: RouteStop[], over: Partial<Entity> = {}): Entity {
+  return {
+    id,
+    type: 'route',
+    label: id,
+    placement: { mode: 'free', x: 0, y: 0 },
+    asset: { symbol: 'route-path', params: { stops } },
+    ...over,
+  };
+}
+
+describe('journeyFocusSet (FEATURE 3)', () => {
+  // territory 'plate' ⊃ 'sub' ⊃ stop 'kiosk' ⊃ 'child'; a second unrelated
+  // territory 'far' with its own stop; plus a free waypoint that anchors nobody.
+  function d(): SceneDocument {
+    return docWith([
+      ent({ id: 'plate', type: 'territory' }),
+      ent({ id: 'sub', type: 'territory', parentId: 'plate' }),
+      ent({ id: 'kiosk', type: 'digital-infra', parentId: 'sub' }),
+      ent({ id: 'child', type: 'digital-infra', parentId: 'kiosk' }),
+      ent({ id: 'far', type: 'territory' }),
+      ent({ id: 'other-stop', type: 'digital-infra' }),
+      route('r', [{ entityId: 'kiosk' }, { x: 500, y: 500 }]),
+      route('r2', [{ entityId: 'other-stop' }]),
+    ]);
+  }
+
+  it('contains the route, its stops, their ancestors and descendants — nothing else', () => {
+    const s = journeyFocusSet(d(), 'r');
+    expect(s).toEqual(new Set(['r', 'kiosk', 'sub', 'plate', 'child']));
+    // explicitly NOT: the unrelated territory, the other route or its stop, and
+    // no free waypoint (it anchors no entity).
+    expect(s).not.toContain('far');
+    expect(s).not.toContain('r2');
+    expect(s).not.toContain('other-stop');
+  });
+
+  it('is one hop: a stop entity’s OTHER routes are not pulled in', () => {
+    // Give 'kiosk' a second route; focusing 'r' must not light 'r3'.
+    const doc = d();
+    doc.entities.push(route('r3', [{ entityId: 'kiosk' }]));
+    const s = journeyFocusSet(doc, 'r');
+    expect(s).not.toContain('r3');
+  });
+
+  it('returns an empty set for a missing or non-route id (caller must guard)', () => {
+    expect(journeyFocusSet(d(), 'ghost')).toEqual(new Set<string>());
+    expect(journeyFocusSet(d(), 'plate')).toEqual(new Set<string>()); // not a route
   });
 });

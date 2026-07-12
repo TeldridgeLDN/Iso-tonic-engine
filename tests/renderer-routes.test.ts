@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { renderSceneToString } from '../src/render/renderer.ts';
-import { createEmptyDocument } from '../src/core/model.ts';
-import { tileToScreen } from '../src/core/iso.ts';
-import type { Entity, SceneDocument } from '../src/core/model.ts';
+import { createEmptyDocument, byId } from '../src/core/model.ts';
+import { tileToScreen, footprintBaseBBox } from '../src/core/iso.ts';
+import type { Entity, GridPlacement, SceneDocument } from '../src/core/model.ts';
 import type { RouteStop } from '../src/core/model.ts';
 
 function ent(partial: Partial<Entity> & { id: string; type: Entity['type'] }): Entity {
@@ -115,7 +115,7 @@ describe('route rendering — badges', () => {
     expect(svg).not.toContain('>4</text>');
   });
 
-  it('anchors an entity stop badge at the anchor entity’s projected position', () => {
+  it('anchors an entity stop badge horizontally at the anchor’s projected x', () => {
     const anchor = tileToScreen(2, 3); // (-32, 80)
     const doc = docWith([
       ent({
@@ -126,7 +126,89 @@ describe('route rendering — badges', () => {
       route('r', [{ entityId: 'g' }, { x: 100, y: 100 }]),
     ]);
     const svg = renderSceneToString(doc);
-    expect(svg).toContain(`cx="${anchor.x}" cy="${anchor.y}"`);
+    // The badge disc keeps the anchor's x (only its y drops below the sprite).
+    expect(svg).toMatch(new RegExp(`cx="${anchor.x}" cy="[\\d.]+"`));
+  });
+});
+
+describe('route rendering — entity-stop badge below the sprite (FEATURE 1)', () => {
+  // Grid entity at (2,3), 1×1 footprint. Its anchor (badge/path convergence)
+  // is the north vertex; the badge must drop below the footprint SOUTH corner.
+  function dropDoc(footprint = { w: 1, d: 1 }): SceneDocument {
+    return docWith([
+      ent({
+        id: 'g',
+        type: 'territory',
+        placement: { mode: 'grid', x: 2, y: 3, footprint },
+      }),
+      route('r', [{ entityId: 'g' }, { x: 100, y: 100 }]),
+    ]);
+  }
+
+  /** cy of the badge disc whose cx equals `cx`. */
+  function discCy(svg: string, cx: number): number {
+    const m = new RegExp(`cx="${cx}" cy="(-?[\\d.]+)"`).exec(svg);
+    if (!m) throw new Error(`no disc at cx=${cx}`);
+    return Number(m[1]);
+  }
+
+  it('drops the entity-stop badge world-y below the footprint south corner', () => {
+    const doc = dropDoc();
+    const svg = renderSceneToString(doc);
+    const anchor = tileToScreen(2, 3); // north vertex (== badge/path anchor)
+    const southY = footprintBaseBBox(byId(doc, 'g')!.placement as GridPlacement).y +
+      footprintBaseBBox(byId(doc, 'g')!.placement as GridPlacement).h; // south corner
+    const cy = discCy(svg, anchor.x);
+    expect(cy).toBeGreaterThan(southY); // sits below the front corner, clear of art
+  });
+
+  it('leaves the polyline vertex at the anchor (only the badge moves down)', () => {
+    const svg = renderSceneToString(dropDoc());
+    const anchor = tileToScreen(2, 3); // (-32, 80)
+    // The path still converges on the un-dropped anchor point.
+    expect(svg).toContain(`points="${anchor.x},${anchor.y} 100,100"`);
+  });
+
+  it('drops further for a deeper footprint (offset derived from the footprint)', () => {
+    const shallow = discCy(renderSceneToString(dropDoc({ w: 1, d: 1 })), tileToScreen(2, 3).x);
+    const deep = discCy(renderSceneToString(dropDoc({ w: 2, d: 3 })), tileToScreen(2, 3).x);
+    expect(deep).toBeGreaterThan(shallow); // bigger footprint → badge drops further
+  });
+
+  it('never drops a free (xy) waypoint badge — it stays on its vertex', () => {
+    const svg = renderSceneToString(dropDoc());
+    // The second stop is the free point (100,100); its badge disc stays there.
+    expect(svg).toContain('cx="100" cy="100"');
+  });
+});
+
+describe('route rendering — hide a journey (FEATURE 2)', () => {
+  function twoRouteDoc(): SceneDocument {
+    return docWith([
+      ent({ id: 'e', type: 'digital-infra', placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 1, d: 1 } } }),
+      route('rA', [{ entityId: 'e' }, { x: 100, y: 0 }], { label: 'Journey A' }),
+      route('rB', [{ entityId: 'e' }, { x: 100, y: 50 }], { label: 'Journey B' }),
+    ]);
+  }
+
+  it('omits a hidden route’s whole group (line + badges + label)', () => {
+    const svg = renderSceneToString(twoRouteDoc(), { hiddenRouteIds: new Set(['rA']) });
+    expect(svg).not.toContain('data-entity-id="rA"');
+    expect(svg).not.toContain('>Journey A</text>');
+  });
+
+  it('leaves other routes rendered when one is hidden', () => {
+    const svg = renderSceneToString(twoRouteDoc(), { hiddenRouteIds: new Set(['rA']) });
+    expect(svg).toContain('data-entity-id="rB"');
+    expect(svg).toContain('>Journey B</text>');
+  });
+
+  it('keeps fan-out lanes reserved: rB badge x is unchanged when rA is hidden', () => {
+    const all = renderSceneToString(twoRouteDoc());
+    const withHidden = renderSceneToString(twoRouteDoc(), { hiddenRouteIds: new Set(['rA']) });
+    // rB is route #2; its shared-stop badge keeps the same offset x (lanes stay
+    // reserved for the hidden rA — visible routes do not re-centre).
+    expect(textX(withHidden, `2${DOT}1`)).toBe(textX(all, `2${DOT}1`));
   });
 });
 
