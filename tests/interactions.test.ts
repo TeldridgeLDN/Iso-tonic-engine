@@ -3,10 +3,13 @@ import {
   resolveGridDrop,
   resolveFreeDrop,
   entitiesInMarquee,
+  resolveGroupMove,
+  isTerritoryEntity,
 } from '../src/render/interactions.ts';
 import { tileToScreen } from '../src/core/iso.ts';
-import type { Entity, SceneDocument } from '../src/core/model.ts';
-import { createEmptyDocument } from '../src/core/model.ts';
+import type { Entity, SceneDocument, Placement } from '../src/core/model.ts';
+import { createEmptyDocument, descendantsOf } from '../src/core/model.ts';
+import { MoveEntity, CompoundCommand } from '../src/core/commands.ts';
 
 function gridEntity(id: string, x: number, y: number, w = 1, d = 1): Entity {
   return {
@@ -110,6 +113,131 @@ describe('entitiesInMarquee', () => {
     const a = gridEntity('a', 0, 0);
     const doc = docWith(a);
     expect(entitiesInMarquee(doc, { x: 100, y: 100 }, { x: 200, y: 200 })).toEqual([]);
+  });
+});
+
+describe('resolveGroupMove — territory drags carry descendants', () => {
+  function territoryPlate(id: string, x: number, y: number, w = 6, d = 6): Entity {
+    return {
+      id,
+      type: 'territory',
+      label: id,
+      placement: { mode: 'grid', x, y, footprint: { w, d } },
+      asset: { symbol: 'territory', params: { w, d } },
+    };
+  }
+  function buildingChild(
+    id: string,
+    parentId: string,
+    x: number,
+    y: number,
+    w = 1,
+    d = 1
+  ): Entity {
+    return {
+      id,
+      type: 'physical-infra',
+      label: id,
+      parentId,
+      placement: { mode: 'grid', x, y, footprint: { w, d } },
+      asset: { symbol: 'building' },
+    };
+  }
+  function figurineChild(id: string, parentId: string, x: number, y: number): Entity {
+    return {
+      id,
+      type: 'user',
+      label: id,
+      parentId,
+      placement: { mode: 'free', x, y },
+      asset: { symbol: 'figurine' },
+    };
+  }
+  const placementOf = (doc: SceneDocument, id: string): Placement =>
+    (doc.entities.find((e) => e.id === id) as Entity).placement;
+
+  it('(scope guard) only territory-category entities are group drags', () => {
+    const plate = territoryPlate('t', 0, 0);
+    const bldg = buildingChild('b', 't', 3, 3);
+    expect(isTerritoryEntity(plate)).toBe(true);
+    expect(isTerritoryEntity(bldg)).toBe(false);
+    // department-zone resolves to the territory asset via ID_ALIASES.
+    const zone: Entity = { ...plate, asset: { symbol: 'department-zone' } };
+    expect(isTerritoryEntity(zone)).toBe(true);
+  });
+
+  it('descendantsOf returns transitive children (grandchildren included)', () => {
+    const plate = territoryPlate('t', 0, 0);
+    const b = buildingChild('b', 't', 3, 3);
+    const f = figurineChild('f', 'b', 1, 2); // grandchild of t
+    const doc = docWith(plate, b, f);
+    expect(descendantsOf(doc, 't').map((e) => e.id).sort()).toEqual(['b', 'f']);
+  });
+
+  it('(a) shifts grid descendants by tile delta and free descendants by px delta', () => {
+    const plate = territoryPlate('t', 0, 0, 6, 6);
+    const bldg = buildingChild('b', 't', 3, 3);
+    const fig = figurineChild('f', 't', 10, 20);
+    const grand = figurineChild('g', 'b', 5, 5); // transitive free descendant
+    const doc = docWith(plate, bldg, fig, grand);
+    // drag plate origin from tile(0,0) → tile(4,2): dtx=4, dty=2.
+    const res = resolveGroupMove(plate, worldAtTile(0, 0), worldAtTile(4, 2), doc);
+    const map = Object.fromEntries(res.members.map((m) => [m.id, m.placement]));
+    expect(res.members[0].id).toBe('t'); // plate first
+    expect(map['t']).toMatchObject({ mode: 'grid', x: 4, y: 2 });
+    expect(map['b']).toMatchObject({ mode: 'grid', x: 7, y: 5 });
+    // free delta = tileToScreen(4,2) = ((4-2)*32, (4+2)*16) = (64, 96).
+    expect(map['f']).toEqual({ mode: 'free', x: 74, y: 116 });
+    expect(map['g']).toEqual({ mode: 'free', x: 69, y: 101 });
+    expect(res.accepted).toBe(true);
+    expect(res.unchanged).toBe(false);
+  });
+
+  it('(b) a CompoundCommand of the moves is ONE undo step restoring all', () => {
+    const plate = territoryPlate('t', 0, 0, 6, 6);
+    const bldg = buildingChild('b', 't', 3, 3);
+    const fig = figurineChild('f', 't', 10, 20);
+    const doc = docWith(plate, bldg, fig);
+    const res = resolveGroupMove(plate, worldAtTile(0, 0), worldAtTile(4, 2), doc);
+    const cmd = new CompoundCommand(
+      'Move territory group',
+      res.members.map((m) => new MoveEntity(m.id, m.placement))
+    );
+    const applied = cmd.apply(doc);
+    expect(placementOf(applied, 't')).toMatchObject({ x: 4, y: 2 });
+    expect(placementOf(applied, 'b')).toMatchObject({ x: 7, y: 5 });
+    expect(placementOf(applied, 'f')).toMatchObject({ x: 74, y: 116 });
+    // one invert restores every moved entity
+    expect(cmd.invert(applied)).toEqual(doc);
+  });
+
+  it('(d) excludes group members from the overlap test (onto a sibling old tile is fine)', () => {
+    const plate = territoryPlate('t', 0, 0, 6, 6);
+    const a = buildingChild('a', 't', 1, 1);
+    const b = buildingChild('b', 't', 2, 1);
+    const doc = docWith(plate, a, b);
+    // shift +1,0: a→(2,1) lands on b's CURRENT tile, but b is a member (→3,1),
+    // so the group must not reject itself.
+    const res = resolveGroupMove(plate, worldAtTile(0, 0), worldAtTile(1, 0), doc);
+    expect(res.accepted).toBe(true);
+  });
+
+  it('(d) rejects when a moving member would overlap a NON-member footprint', () => {
+    const plate = territoryPlate('t', 0, 0, 6, 6);
+    const a = buildingChild('a', 't', 1, 1);
+    const obstacle = gridEntity('obs', 5, 1); // not a child of the plate
+    const doc = docWith(plate, a, obstacle);
+    // shift +4,0: a→(5,1) collides with the non-member obstacle.
+    const res = resolveGroupMove(plate, worldAtTile(0, 0), worldAtTile(4, 0), doc);
+    expect(res.accepted).toBe(false);
+  });
+
+  it('flags a zero-delta group drag as unchanged', () => {
+    const plate = territoryPlate('t', 3, 4, 6, 6);
+    const bldg = buildingChild('b', 't', 5, 6);
+    const doc = docWith(plate, bldg);
+    const res = resolveGroupMove(plate, worldAtTile(0, 0), worldAtTile(0, 0), doc);
+    expect(res.unchanged).toBe(true);
   });
 });
 

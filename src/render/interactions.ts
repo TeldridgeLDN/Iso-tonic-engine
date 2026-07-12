@@ -13,9 +13,9 @@
 // factored into resolveGridDrop() so it can be unit-tested headlessly.
 
 import type { Entity, GridPlacement, Placement, SceneDocument } from '../core/model.ts';
-import { byId, footprintsOverlap } from '../core/model.ts';
+import { byId, descendantsOf, footprintsOverlap } from '../core/model.ts';
 import { screenToTile, snapToTile, tileToScreen } from '../core/iso.ts';
-import { MoveEntity, ResizeEntity, type History } from '../core/commands.ts';
+import { CompoundCommand, MoveEntity, ResizeEntity, type History } from '../core/commands.ts';
 import type { Camera } from '../core/model.ts';
 import { panBy, screenToWorld, wheelZoom } from './camera.ts';
 import { entityOrigin } from './renderer.ts';
@@ -96,6 +96,115 @@ export function resolveGridDrop(
     );
 
   return { placement, accepted: !collides, unchanged };
+}
+
+/** True if the entity's asset resolves to the 'territory' category (ground plate).
+ * getAsset resolves back-compat aliases (department-zone / process-zone →
+ * territory), so migrated-or-not, a plate is recognised. */
+export function isTerritoryEntity(entity: Entity): boolean {
+  return getAsset(entity.asset.symbol)?.category === 'territory';
+}
+
+/** One moving member of a group drag: an entity id and its post-drag placement. */
+export interface GroupMoveMember {
+  id: string;
+  placement: Placement;
+}
+
+export interface GroupMoveResult {
+  /** Post-drag placements for every moving member; the plate is first. */
+  members: GroupMoveMember[];
+  /** false if any non-ground member would overlap a NON-member footprint. */
+  accepted: boolean;
+  /** true if the tile delta is zero (no-op drag). */
+  unchanged: boolean;
+  /** The plate's own snapped grid placement (drives the live ghost). */
+  placement: GridPlacement;
+}
+
+/**
+ * Resolve a GROUP drag of a territory plate: the plate AND all its transitive
+ * descendants move together by one tile delta, as ONE unit.
+ *
+ * The plate's origin is snapped exactly like resolveGridDrop (so a plate drag on
+ * its own behaves identically). The resulting integer tile delta (dtx, dty) is
+ * then applied to every descendant:
+ *   - grid descendants shift by (dtx, dty) tiles;
+ *   - free descendants (figurines, routes) shift by the world-px equivalent,
+ *     which — because tileToScreen is linear through the origin — is exactly
+ *     tileToScreen(dtx, dty) = ((dtx−dty)·32, (dtx+dty)·16). Deriving it via the
+ *     projection avoids hard-coding HALF_W/HALF_H.
+ * Route stops are left untouched: entityId stops follow their (moved) targets
+ * automatically; only a route's own free label placement shifts (consistent
+ * with how routes render).
+ *
+ * Overlap: the whole group is the moving unit, so every group member is excluded
+ * from the obstacle set (a descendant's current tile can't cause a spurious
+ * rejection, and the group never tests against itself). A non-ground member
+ * landing on a NON-member non-ground footprint rejects the whole drag. Ground
+ * members (the plate, nested plates) underlie everything and are exempt as
+ * movers, mirroring resolveGridDrop.
+ */
+export function resolveGroupMove(
+  plate: Entity,
+  worldStart: { x: number; y: number },
+  worldNow: { x: number; y: number },
+  doc: SceneDocument
+): GroupMoveResult {
+  const orig = plate.placement as GridPlacement;
+
+  const tStart = screenToTile(worldStart.x, worldStart.y);
+  const tNow = screenToTile(worldNow.x, worldNow.y);
+  const snapped = snapToTile(
+    orig.x + (tNow.tx - tStart.tx),
+    orig.y + (tNow.ty - tStart.ty)
+  );
+  const dtx = snapped.tx - orig.x;
+  const dty = snapped.ty - orig.y;
+  const unchanged = dtx === 0 && dty === 0;
+
+  const platePlacement: GridPlacement = {
+    mode: 'grid',
+    x: snapped.tx,
+    y: snapped.ty,
+    footprint: orig.footprint,
+    ...(orig.rotation !== undefined ? { rotation: orig.rotation } : {}),
+  };
+
+  // World-px equivalent of the tile delta, derived from the projection.
+  const px = tileToScreen(dtx, dty);
+  const shift = (e: Entity): Placement => {
+    const p = e.placement;
+    return p.mode === 'grid'
+      ? { ...p, x: p.x + dtx, y: p.y + dty }
+      : { ...p, x: p.x + px.x, y: p.y + px.y };
+  };
+
+  const descendants = descendantsOf(doc, plate.id);
+  const members: GroupMoveMember[] = [
+    { id: plate.id, placement: platePlacement },
+    ...descendants.map((d) => ({ id: d.id, placement: shift(d) })),
+  ];
+
+  const memberIds = new Set(members.map((m) => m.id));
+  const entityById = new Map<string, Entity>([
+    [plate.id, plate],
+    ...descendants.map((d) => [d.id, d] as const),
+  ]);
+  const collides = members.some((m) => {
+    if (m.placement.mode !== 'grid') return false;
+    const ent = entityById.get(m.id);
+    if (ent && isGroundAsset(ent)) return false; // ground members underlie things
+    return doc.entities.some(
+      (other) =>
+        !memberIds.has(other.id) &&
+        other.placement.mode === 'grid' &&
+        !isGroundAsset(other) &&
+        footprintsOverlap(m.placement as GridPlacement, other.placement)
+    );
+  });
+
+  return { members, accepted: !collides, unchanged, placement: platePlacement };
 }
 
 /**
@@ -556,7 +665,11 @@ export class InteractionController {
     const worldNow = this.worldPoint(evt);
 
     if (entity.placement.mode === 'grid') {
-      const res = resolveGridDrop(entity, worldStart, worldNow, doc);
+      // Territory plates drag as a group (plate + descendants); the ghost shows
+      // the plate at its snapped position with the GROUP's rejection state.
+      const res = isTerritoryEntity(entity)
+        ? resolveGroupMove(entity, worldStart, worldNow, doc)
+        : resolveGridDrop(entity, worldStart, worldNow, doc);
       this.host.setGhost?.(entity.id, res.placement, !res.accepted);
     } else {
       const next = resolveFreeDrop(entity, worldStart, worldNow);
@@ -608,6 +721,24 @@ export class InteractionController {
     const worldNow = this.worldPoint(evt);
 
     if (entity.placement.mode === 'grid') {
+      // Territory plate → group move (plate + all descendants) as ONE undo step.
+      if (isTerritoryEntity(entity)) {
+        const res = resolveGroupMove(entity, this.drag.worldStart, worldNow, doc);
+        if (res.accepted && !res.unchanged) {
+          this.host.history.execute(
+            new CompoundCommand(
+              'Move territory group',
+              res.members.map((m) => new MoveEntity(m.id, m.placement))
+            )
+          );
+        } else if (!res.accepted) {
+          console.warn(
+            `[iso] group drop rejected: ${entity.id} + descendants would overlap ` +
+              `another footprint at (${res.placement.x},${res.placement.y})`
+          );
+        }
+        return;
+      }
       const res = resolveGridDrop(entity, this.drag.worldStart, worldNow, doc);
       if (res.accepted && !res.unchanged) {
         this.host.history.execute(new MoveEntity(entity.id, res.placement));

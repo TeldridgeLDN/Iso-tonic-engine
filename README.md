@@ -46,6 +46,18 @@ npm run contact-sheet  # render every asset to contact-sheet.svg
 
 Deployed automatically to GitHub Pages on push to `main`.
 
+**Visual check (canonical).** After any scene- or renderer-affecting change,
+render a scene standalone and actually look at it — tests alone won't catch
+overlaps or layout regressions:
+
+```bash
+npx vite-node scripts/preview-doc.ts examples/identity-verification-journey.iso.json /tmp/out.svg
+qlmanage -t -s 1400 -o /tmp /tmp/out.svg   # macOS → /tmp/out.svg.png
+```
+
+`scripts/preview-doc.ts` validates the doc and writes a self-contained SVG; it
+is the canonical visual check for renderer/scene work.
+
 ## Public viewer / private editor
 
 The deployed site has two pages:

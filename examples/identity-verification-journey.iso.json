@@ -7,8 +7,16 @@
     "modified": "2026-07-12T00:00:00.000Z"
   },
   "layers": [
-    { "id": "layer-digital", "name": "Digital path", "visible": true },
-    { "id": "layer-fallback", "name": "Fallback path", "visible": true }
+    {
+      "id": "layer-digital",
+      "name": "Digital path",
+      "visible": true
+    },
+    {
+      "id": "layer-fallback",
+      "name": "Fallback path",
+      "visible": true
+    }
   ],
   "entities": [
     {
@@ -16,16 +24,45 @@
       "type": "territory",
       "label": "Citizen's home district",
       "description": "Where the online journey starts — the citizen's own home and devices.",
-      "placement": { "mode": "grid", "x": 0, "y": 0, "footprint": { "w": 6, "d": 6 } },
-      "asset": { "symbol": "territory", "params": { "w": 6, "d": 6 } }
+      "placement": {
+        "mode": "grid",
+        "x": 0,
+        "y": 0,
+        "footprint": {
+          "w": 6,
+          "d": 6
+        }
+      },
+      "asset": {
+        "symbol": "territory",
+        "params": {
+          "w": 6,
+          "d": 6
+        }
+      }
     },
     {
       "id": "org-idp",
       "type": "organisation",
       "label": "Identity provider",
       "description": "Runs document and face matching plus the support centre for people who fail automated checks.",
-      "placement": { "mode": "grid", "x": 11, "y": 0, "footprint": { "w": 6, "d": 7 } },
-      "asset": { "symbol": "department-zone", "params": { "w": 6, "d": 7, "label": "Identity provider" } },
+      "placement": {
+        "mode": "grid",
+        "x": 11,
+        "y": 0,
+        "footprint": {
+          "w": 6,
+          "d": 7
+        }
+      },
+      "asset": {
+        "symbol": "department-zone",
+        "params": {
+          "w": 6,
+          "d": 7,
+          "label": "Identity provider"
+        }
+      },
       "userGoal": "Prove I'm me once, with documents I actually have.",
       "orgGoal": "High match confidence with low false rejection."
     },
@@ -34,8 +71,23 @@
       "type": "organisation",
       "label": "Benefits Department",
       "description": "Owns the benefit: eligibility, casework, and payment.",
-      "placement": { "mode": "grid", "x": 22, "y": 0, "footprint": { "w": 8, "d": 7 } },
-      "asset": { "symbol": "department-zone", "params": { "w": 8, "d": 7, "label": "Benefits Dept" } },
+      "placement": {
+        "mode": "grid",
+        "x": 22,
+        "y": 0,
+        "footprint": {
+          "w": 8,
+          "d": 7
+        }
+      },
+      "asset": {
+        "symbol": "department-zone",
+        "params": {
+          "w": 8,
+          "d": 7,
+          "label": "Benefits Dept"
+        }
+      },
       "userGoal": "Get the benefit I am entitled to without repeating myself.",
       "orgGoal": "Maximise straight-through processing; pay the right people quickly."
     },
@@ -45,20 +97,44 @@
       "label": "In-person verification point",
       "description": "Post-Office-style face-to-face document check for people the digital route cannot verify.",
       "parentId": "org-idp",
-      "placement": { "mode": "grid", "x": 11, "y": 12, "footprint": { "w": 6, "d": 6 } },
-      "asset": { "symbol": "department-zone", "params": { "w": 6, "d": 6, "label": "ID check point" } },
+      "placement": {
+        "mode": "grid",
+        "x": 11,
+        "y": 12,
+        "footprint": {
+          "w": 6,
+          "d": 6
+        }
+      },
+      "asset": {
+        "symbol": "department-zone",
+        "params": {
+          "w": 6,
+          "d": 6,
+          "label": "ID check point"
+        }
+      },
       "userGoal": "Finish verification in one visit.",
       "orgGoal": "Recover users the automated checks exclude."
     },
-
     {
       "id": "home",
       "type": "physical-infra",
       "label": "Citizen's home",
       "description": "Where the online journey starts.",
       "parentId": "terr-home",
-      "placement": { "mode": "grid", "x": 1, "y": 1, "footprint": { "w": 1, "d": 1 } },
-      "asset": { "symbol": "house-small" }
+      "placement": {
+        "mode": "grid",
+        "x": 1,
+        "y": 1,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "house-small"
+      }
     },
     {
       "id": "sys-laptop",
@@ -66,8 +142,18 @@
       "label": "GOV website on a laptop",
       "description": "The citizen's own device — entry point to the claim.",
       "parentId": "terr-home",
-      "placement": { "mode": "grid", "x": 3, "y": 1, "footprint": { "w": 1, "d": 1 } },
-      "asset": { "symbol": "gov-laptop" }
+      "placement": {
+        "mode": "grid",
+        "x": 3,
+        "y": 1,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "gov-laptop"
+      }
     },
     {
       "id": "sys-app",
@@ -75,18 +161,37 @@
       "label": "ID-check phone app",
       "description": "Document photos and face scan on the citizen's phone.",
       "parentId": "terr-home",
-      "placement": { "mode": "grid", "x": 1, "y": 3, "footprint": { "w": 1, "d": 1 } },
-      "asset": { "symbol": "gov-app" }
+      "placement": {
+        "mode": "grid",
+        "x": 1,
+        "y": 3,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "gov-app"
+      }
     },
-
     {
       "id": "sys-verify",
       "type": "digital-infra",
       "label": "Identity matching engine",
       "description": "Automated document + face matching. The gate everyone must pass — or fall out of.",
       "parentId": "org-idp",
-      "placement": { "mode": "grid", "x": 12, "y": 1, "footprint": { "w": 1, "d": 1 } },
-      "asset": { "symbol": "verify-details" }
+      "placement": {
+        "mode": "grid",
+        "x": 12,
+        "y": 1,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "verify-details"
+      }
     },
     {
       "id": "team-support",
@@ -94,8 +199,18 @@
       "label": "Support centre",
       "description": "Phone and webchat help for people who fail automated checks.",
       "parentId": "org-idp",
-      "placement": { "mode": "grid", "x": 12, "y": 3, "footprint": { "w": 2, "d": 2 } },
-      "asset": { "symbol": "desk-reception" },
+      "placement": {
+        "mode": "grid",
+        "x": 12,
+        "y": 3,
+        "footprint": {
+          "w": 2,
+          "d": 2
+        }
+      },
+      "asset": {
+        "symbol": "desk-reception"
+      },
       "orgGoal": "Recover users who drop out of the digital path."
     },
     {
@@ -104,18 +219,40 @@
       "label": "Support line",
       "description": "The phone call that rescues a failed automated check.",
       "parentId": "team-support",
-      "placement": { "mode": "grid", "x": 15, "y": 3, "footprint": { "w": 1, "d": 1 } },
-      "asset": { "symbol": "telephone" }
+      "placement": {
+        "mode": "grid",
+        "x": 15,
+        "y": 3,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "telephone"
+      }
     },
-
     {
       "id": "bld-dept",
       "type": "physical-infra",
       "label": "Benefits Department HQ",
       "description": "Back office for the benefit service.",
       "parentId": "org-benefits",
-      "placement": { "mode": "grid", "x": 23, "y": 1, "footprint": { "w": 2, "d": 2 } },
-      "asset": { "symbol": "office-block", "params": { "signage": "BENEFITS" } }
+      "placement": {
+        "mode": "grid",
+        "x": 23,
+        "y": 1,
+        "footprint": {
+          "w": 2,
+          "d": 2
+        }
+      },
+      "asset": {
+        "symbol": "office-block",
+        "params": {
+          "signage": "BENEFITS"
+        }
+      }
     },
     {
       "id": "sys-form",
@@ -123,8 +260,18 @@
       "label": "Benefit application form",
       "description": "The online claim — apply, then get sent to identity verification.",
       "parentId": "org-benefits",
-      "placement": { "mode": "grid", "x": 26, "y": 1, "footprint": { "w": 1, "d": 1 } },
-      "asset": { "symbol": "digital-form" }
+      "placement": {
+        "mode": "grid",
+        "x": 26,
+        "y": 1,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "digital-form"
+      }
     },
     {
       "id": "team-casework",
@@ -132,8 +279,18 @@
       "label": "Caseworkers",
       "description": "Pick up claims the automated checks can't clear.",
       "parentId": "org-benefits",
-      "placement": { "mode": "grid", "x": 23, "y": 4, "footprint": { "w": 2, "d": 2 } },
-      "asset": { "symbol": "desk-cluster" },
+      "placement": {
+        "mode": "grid",
+        "x": 23,
+        "y": 4,
+        "footprint": {
+          "w": 2,
+          "d": 2
+        }
+      },
+      "asset": {
+        "symbol": "desk-cluster"
+      },
       "orgGoal": "Resolve exceptions quickly without fraud risk."
     },
     {
@@ -142,8 +299,18 @@
       "label": "Casework queue dashboard",
       "description": "The caseworkers' view of claims stuck in verification.",
       "parentId": "team-casework",
-      "placement": { "mode": "grid", "x": 26, "y": 4, "footprint": { "w": 1, "d": 1 } },
-      "asset": { "symbol": "status-dashboard" }
+      "placement": {
+        "mode": "grid",
+        "x": 26,
+        "y": 4,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "status-dashboard"
+      }
     },
     {
       "id": "sys-payments",
@@ -151,18 +318,40 @@
       "label": "Benefit payment",
       "description": "The payout that unlocks once identity is proven. Every journey ends here.",
       "parentId": "org-benefits",
-      "placement": { "mode": "grid", "x": 28, "y": 4, "footprint": { "w": 1, "d": 1 } },
-      "asset": { "symbol": "payments" }
+      "placement": {
+        "mode": "grid",
+        "x": 28,
+        "y": 4,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "payments"
+      }
     },
-
     {
       "id": "bld-shop",
       "type": "physical-infra",
       "label": "ID check counter",
       "description": "Face-to-face document check.",
       "parentId": "dept-inperson",
-      "placement": { "mode": "grid", "x": 12, "y": 13, "footprint": { "w": 2, "d": 1 } },
-      "asset": { "symbol": "shop-front", "params": { "signage": "ID CHECK" } }
+      "placement": {
+        "mode": "grid",
+        "x": 12,
+        "y": 13,
+        "footprint": {
+          "w": 2,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "shop-front",
+        "params": {
+          "signage": "ID CHECK"
+        }
+      }
     },
     {
       "id": "team-counter",
@@ -170,8 +359,18 @@
       "label": "Verification counter staff",
       "description": "Check documents in person and vouch the identity back into the digital system.",
       "parentId": "dept-inperson",
-      "placement": { "mode": "grid", "x": 12, "y": 15, "footprint": { "w": 2, "d": 2 } },
-      "asset": { "symbol": "desk-single" }
+      "placement": {
+        "mode": "grid",
+        "x": 12,
+        "y": 15,
+        "footprint": {
+          "w": 2,
+          "d": 2
+        }
+      },
+      "asset": {
+        "symbol": "desk-single"
+      }
     },
     {
       "id": "sys-booking",
@@ -179,97 +378,474 @@
       "label": "Appointment booking",
       "description": "Books the in-person slot when digital checks fail.",
       "parentId": "dept-inperson",
-      "placement": { "mode": "grid", "x": 15, "y": 13, "footprint": { "w": 1, "d": 1 } },
-      "asset": { "symbol": "appointment-booking" }
+      "placement": {
+        "mode": "grid",
+        "x": 15,
+        "y": 13,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "appointment-booking"
+      }
     },
-
-    { "id": "road-1", "type": "physical-infra", "label": "Street", "placement": { "mode": "grid", "x": 6, "y": 2, "footprint": { "w": 1, "d": 1 } }, "asset": { "symbol": "road-straight" } },
-    { "id": "road-2", "type": "physical-infra", "label": "Street", "placement": { "mode": "grid", "x": 7, "y": 2, "footprint": { "w": 1, "d": 1 } }, "asset": { "symbol": "road-straight" } },
-    { "id": "road-3", "type": "physical-infra", "label": "Street", "placement": { "mode": "grid", "x": 8, "y": 2, "footprint": { "w": 1, "d": 1 } }, "asset": { "symbol": "road-straight" } },
-    { "id": "road-4", "type": "physical-infra", "label": "Street", "placement": { "mode": "grid", "x": 9, "y": 2, "footprint": { "w": 1, "d": 1 } }, "asset": { "symbol": "road-straight" } },
-    { "id": "road-5", "type": "physical-infra", "label": "Street", "placement": { "mode": "grid", "x": 10, "y": 2, "footprint": { "w": 1, "d": 1 } }, "asset": { "symbol": "road-straight" } },
-    { "id": "road-6", "type": "physical-infra", "label": "Street", "placement": { "mode": "grid", "x": 17, "y": 2, "footprint": { "w": 1, "d": 1 } }, "asset": { "symbol": "road-straight" } },
-    { "id": "road-7", "type": "physical-infra", "label": "Street", "placement": { "mode": "grid", "x": 18, "y": 2, "footprint": { "w": 1, "d": 1 } }, "asset": { "symbol": "road-straight" } },
-    { "id": "road-8", "type": "physical-infra", "label": "Street", "placement": { "mode": "grid", "x": 19, "y": 2, "footprint": { "w": 1, "d": 1 } }, "asset": { "symbol": "road-straight" } },
-    { "id": "road-9", "type": "physical-infra", "label": "Street", "placement": { "mode": "grid", "x": 20, "y": 2, "footprint": { "w": 1, "d": 1 } }, "asset": { "symbol": "road-straight" } },
-    { "id": "road-10", "type": "physical-infra", "label": "Street", "placement": { "mode": "grid", "x": 21, "y": 2, "footprint": { "w": 1, "d": 1 } }, "asset": { "symbol": "road-straight" } },
-    { "id": "road-11", "type": "physical-infra", "label": "Street", "placement": { "mode": "grid", "x": 13, "y": 7, "footprint": { "w": 1, "d": 1 } }, "asset": { "symbol": "road-straight", "params": { "orientation": 1 } } },
-    { "id": "road-12", "type": "physical-infra", "label": "Street", "placement": { "mode": "grid", "x": 13, "y": 8, "footprint": { "w": 1, "d": 1 } }, "asset": { "symbol": "road-straight", "params": { "orientation": 1 } } },
-    { "id": "road-13", "type": "physical-infra", "label": "Street", "placement": { "mode": "grid", "x": 13, "y": 9, "footprint": { "w": 1, "d": 1 } }, "asset": { "symbol": "road-straight", "params": { "orientation": 1 } } },
-    { "id": "road-14", "type": "physical-infra", "label": "Street", "placement": { "mode": "grid", "x": 13, "y": 10, "footprint": { "w": 1, "d": 1 } }, "asset": { "symbol": "road-straight", "params": { "orientation": 1 } } },
-    { "id": "road-15", "type": "physical-infra", "label": "Street", "placement": { "mode": "grid", "x": 13, "y": 11, "footprint": { "w": 1, "d": 1 } }, "asset": { "symbol": "road-straight", "params": { "orientation": 1 } } },
-    { "id": "tree-1", "type": "physical-infra", "label": "Tree", "placement": { "mode": "grid", "x": 8, "y": 4, "footprint": { "w": 1, "d": 1 } }, "asset": { "symbol": "tree-round" } },
+    {
+      "id": "road-1",
+      "type": "physical-infra",
+      "label": "Street",
+      "placement": {
+        "mode": "grid",
+        "x": 6,
+        "y": 2,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "road-straight"
+      }
+    },
+    {
+      "id": "road-2",
+      "type": "physical-infra",
+      "label": "Street",
+      "placement": {
+        "mode": "grid",
+        "x": 7,
+        "y": 2,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "road-straight"
+      }
+    },
+    {
+      "id": "road-3",
+      "type": "physical-infra",
+      "label": "Street",
+      "placement": {
+        "mode": "grid",
+        "x": 8,
+        "y": 2,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "road-straight"
+      }
+    },
+    {
+      "id": "road-4",
+      "type": "physical-infra",
+      "label": "Street",
+      "placement": {
+        "mode": "grid",
+        "x": 9,
+        "y": 2,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "road-straight"
+      }
+    },
+    {
+      "id": "road-5",
+      "type": "physical-infra",
+      "label": "Street",
+      "placement": {
+        "mode": "grid",
+        "x": 10,
+        "y": 2,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "road-straight"
+      }
+    },
+    {
+      "id": "road-6",
+      "type": "physical-infra",
+      "label": "Street",
+      "placement": {
+        "mode": "grid",
+        "x": 17,
+        "y": 2,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "road-straight"
+      }
+    },
+    {
+      "id": "road-7",
+      "type": "physical-infra",
+      "label": "Street",
+      "placement": {
+        "mode": "grid",
+        "x": 18,
+        "y": 2,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "road-straight"
+      }
+    },
+    {
+      "id": "road-8",
+      "type": "physical-infra",
+      "label": "Street",
+      "placement": {
+        "mode": "grid",
+        "x": 19,
+        "y": 2,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "road-straight"
+      }
+    },
+    {
+      "id": "road-9",
+      "type": "physical-infra",
+      "label": "Street",
+      "placement": {
+        "mode": "grid",
+        "x": 20,
+        "y": 2,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "road-straight"
+      }
+    },
+    {
+      "id": "road-10",
+      "type": "physical-infra",
+      "label": "Street",
+      "placement": {
+        "mode": "grid",
+        "x": 21,
+        "y": 2,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "road-straight"
+      }
+    },
+    {
+      "id": "road-11",
+      "type": "physical-infra",
+      "label": "Street",
+      "placement": {
+        "mode": "grid",
+        "x": 13,
+        "y": 7,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "road-straight",
+        "params": {
+          "orientation": 1
+        }
+      }
+    },
+    {
+      "id": "road-12",
+      "type": "physical-infra",
+      "label": "Street",
+      "placement": {
+        "mode": "grid",
+        "x": 13,
+        "y": 8,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "road-straight",
+        "params": {
+          "orientation": 1
+        }
+      }
+    },
+    {
+      "id": "road-13",
+      "type": "physical-infra",
+      "label": "Street",
+      "placement": {
+        "mode": "grid",
+        "x": 13,
+        "y": 9,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "road-straight",
+        "params": {
+          "orientation": 1
+        }
+      }
+    },
+    {
+      "id": "road-14",
+      "type": "physical-infra",
+      "label": "Street",
+      "placement": {
+        "mode": "grid",
+        "x": 13,
+        "y": 10,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "road-straight",
+        "params": {
+          "orientation": 1
+        }
+      }
+    },
+    {
+      "id": "road-15",
+      "type": "physical-infra",
+      "label": "Street",
+      "placement": {
+        "mode": "grid",
+        "x": 13,
+        "y": 11,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "road-straight",
+        "params": {
+          "orientation": 1
+        }
+      }
+    },
+    {
+      "id": "tree-1",
+      "type": "physical-infra",
+      "label": "Tree",
+      "placement": {
+        "mode": "grid",
+        "x": 8,
+        "y": 4,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "tree-round"
+      }
+    },
     {
       "id": "sign-1",
       "type": "digital-infra",
       "label": "Service signpost",
       "description": "Wayfinding between the digital service and the in-person fallback.",
-      "placement": { "mode": "grid", "x": 15, "y": 9, "footprint": { "w": 1, "d": 1 } },
-      "asset": { "symbol": "service-signpost" }
+      "placement": {
+        "mode": "grid",
+        "x": 15,
+        "y": 9,
+        "footprint": {
+          "w": 1,
+          "d": 1
+        }
+      },
+      "asset": {
+        "symbol": "service-signpost"
+      }
     },
-
     {
       "id": "cit-1",
       "type": "user",
       "label": "Digitally-confident citizen",
       "description": "Self-serves end-to-end on laptop and phone.",
-      "placement": { "mode": "free", "x": 64, "y": 96 },
-      "asset": { "symbol": "figurine", "params": { "skin": "tone-2", "hairStyle": "short", "hairColor": "black", "top": "hoodie", "bottom": "trousers" } },
-      "userGoal": "Prove my identity in one sitting and get the claim in."
+      "placement": {
+        "mode": "free",
+        "x": 64,
+        "y": 96
+      },
+      "asset": {
+        "symbol": "figurine",
+        "params": {
+          "skin": "tone-2",
+          "hairStyle": "short",
+          "hairColor": "black",
+          "top": "hoodie",
+          "bottom": "trousers"
+        }
+      },
+      "userGoal": "Prove my identity in one sitting and get the claim in.",
+      "parentId": "terr-home"
     },
     {
       "id": "cit-2",
       "type": "user",
       "label": "Digitally-confident citizen",
       "description": "Self-serves end-to-end on laptop and phone.",
-      "placement": { "mode": "free", "x": 0, "y": 128, "rotation": 1 },
-      "asset": { "symbol": "figurine", "params": { "skin": "tone-4", "hairStyle": "bun", "hairColor": "brown", "top": "shirt", "bottom": "skirt" } },
-      "userGoal": "Prove my identity in one sitting and get the claim in."
+      "placement": {
+        "mode": "free",
+        "x": 0,
+        "y": 128,
+        "rotation": 1
+      },
+      "asset": {
+        "symbol": "figurine",
+        "params": {
+          "skin": "tone-4",
+          "hairStyle": "bun",
+          "hairColor": "brown",
+          "top": "shirt",
+          "bottom": "skirt"
+        }
+      },
+      "userGoal": "Prove my identity in one sitting and get the claim in.",
+      "parentId": "terr-home"
     },
     {
       "id": "cit-3",
       "type": "user",
       "label": "Assisted-digital citizen",
       "description": "Started online, failed the automated ID check — no photo ID, thin credit file.",
-      "placement": { "mode": "free", "x": 320, "y": 320 },
-      "asset": { "symbol": "figurine", "params": { "skin": "tone-1", "hairStyle": "curly", "hairColor": "grey", "top": "jacket", "bottom": "trousers" } },
-      "userGoal": "Find a human who can sort out why the computer says no."
+      "placement": {
+        "mode": "free",
+        "x": 320,
+        "y": 320
+      },
+      "asset": {
+        "symbol": "figurine",
+        "params": {
+          "skin": "tone-1",
+          "hairStyle": "curly",
+          "hairColor": "grey",
+          "top": "jacket",
+          "bottom": "trousers"
+        }
+      },
+      "userGoal": "Find a human who can sort out why the computer says no.",
+      "parentId": "org-idp"
     },
     {
       "id": "cit-4",
       "type": "user",
       "label": "Assisted-digital citizen",
       "description": "Recovering a failed check over the phone.",
-      "placement": { "mode": "free", "x": 224, "y": 272, "rotation": 1 },
-      "asset": { "symbol": "figurine", "params": { "skin": "tone-3", "hairStyle": "long", "hairColor": "black", "top": "shirt", "bottom": "trousers" } },
-      "userGoal": "Find a human who can sort out why the computer says no."
+      "placement": {
+        "mode": "free",
+        "x": 224,
+        "y": 272,
+        "rotation": 1
+      },
+      "asset": {
+        "symbol": "figurine",
+        "params": {
+          "skin": "tone-3",
+          "hairStyle": "long",
+          "hairColor": "black",
+          "top": "shirt",
+          "bottom": "trousers"
+        }
+      },
+      "userGoal": "Find a human who can sort out why the computer says no.",
+      "parentId": "team-support"
     },
     {
       "id": "cit-5",
       "type": "user",
       "label": "In-person citizen",
       "description": "Verifying face-to-face at the ID check point.",
-      "placement": { "mode": "free", "x": 0, "y": 480 },
-      "asset": { "symbol": "figurine", "params": { "skin": "tone-5", "hairStyle": "bald", "hairColor": "black", "top": "jacket", "bottom": "trousers", "accessory": "clipboard" } },
-      "userGoal": "Finish verification in one visit."
+      "placement": {
+        "mode": "free",
+        "x": 0,
+        "y": 480
+      },
+      "asset": {
+        "symbol": "figurine",
+        "params": {
+          "skin": "tone-5",
+          "hairStyle": "bald",
+          "hairColor": "black",
+          "top": "jacket",
+          "bottom": "trousers",
+          "accessory": "clipboard"
+        }
+      },
+      "userGoal": "Finish verification in one visit.",
+      "parentId": "team-counter"
     },
-
     {
       "id": "route-digital",
       "type": "route",
       "label": "1 · Straight-through digital",
       "description": "The happy path: apply, scan, match, paid — never touches a human.",
-      "customLayers": ["layer-digital"],
-      "placement": { "mode": "free", "x": 64, "y": 48 },
+      "customLayers": [
+        "layer-digital"
+      ],
+      "placement": {
+        "mode": "free",
+        "x": 64,
+        "y": 48
+      },
       "asset": {
         "symbol": "route-path",
         "params": {
           "stops": [
-            { "entityId": "sys-laptop" },
-            { "entityId": "sys-form" },
-            { "entityId": "sys-app" },
-            { "entityId": "sys-verify" },
-            { "entityId": "sys-payments" }
+            {
+              "entityId": "sys-laptop"
+            },
+            {
+              "entityId": "sys-form"
+            },
+            {
+              "entityId": "sys-app"
+            },
+            {
+              "entityId": "sys-verify"
+            },
+            {
+              "entityId": "sys-payments"
+            }
           ]
         }
       }
@@ -279,18 +855,36 @@
       "type": "route",
       "label": "2 · Assisted recovery",
       "description": "The phone-rescue path: automated match fails, support centre and a caseworker get it through.",
-      "customLayers": ["layer-fallback"],
-      "placement": { "mode": "free", "x": 72, "y": 40 },
+      "customLayers": [
+        "layer-fallback"
+      ],
+      "placement": {
+        "mode": "free",
+        "x": 72,
+        "y": 40
+      },
       "asset": {
         "symbol": "route-path",
         "params": {
           "stops": [
-            { "entityId": "sys-laptop" },
-            { "entityId": "sys-form" },
-            { "entityId": "sys-verify" },
-            { "entityId": "sys-phone" },
-            { "entityId": "team-casework" },
-            { "entityId": "sys-payments" }
+            {
+              "entityId": "sys-laptop"
+            },
+            {
+              "entityId": "sys-form"
+            },
+            {
+              "entityId": "sys-verify"
+            },
+            {
+              "entityId": "sys-phone"
+            },
+            {
+              "entityId": "team-casework"
+            },
+            {
+              "entityId": "sys-payments"
+            }
           ]
         }
       }
@@ -300,45 +894,90 @@
       "type": "route",
       "label": "3 · In-person fallback",
       "description": "The physical leg: digital check fails, book a slot, verify at the counter, then get paid.",
-      "customLayers": ["layer-fallback"],
-      "placement": { "mode": "free", "x": -80, "y": 56 },
+      "customLayers": [
+        "layer-fallback"
+      ],
+      "placement": {
+        "mode": "free",
+        "x": -80,
+        "y": 56
+      },
       "asset": {
         "symbol": "route-path",
         "params": {
           "stops": [
-            { "entityId": "sys-app" },
-            { "entityId": "sys-verify" },
-            { "entityId": "sys-booking" },
-            { "entityId": "bld-shop" },
-            { "entityId": "sys-payments" }
+            {
+              "entityId": "sys-app"
+            },
+            {
+              "entityId": "sys-verify"
+            },
+            {
+              "entityId": "sys-booking"
+            },
+            {
+              "entityId": "bld-shop"
+            },
+            {
+              "entityId": "sys-payments"
+            }
           ]
         }
       }
     },
-
     {
       "id": "ann-exclusion",
       "type": "annotation",
       "label": "Exclusion point",
       "anchorEntityId": "sys-verify",
-      "placement": { "mode": "free", "x": 640, "y": 96 },
-      "asset": { "symbol": "callout", "params": { "text": "What happens to people with no photo ID and a thin credit file?", "leader": true } }
+      "placement": {
+        "mode": "free",
+        "x": 640,
+        "y": 96
+      },
+      "asset": {
+        "symbol": "callout",
+        "params": {
+          "text": "What happens to people with no photo ID and a thin credit file?",
+          "leader": true
+        }
+      }
     },
     {
       "id": "ann-recovery",
       "type": "annotation",
       "label": "Recovery friction",
       "anchorEntityId": "sys-phone",
-      "placement": { "mode": "free", "x": -288, "y": 272 },
-      "asset": { "symbol": "callout", "params": { "text": "Why does a failed automated check take a phone call to recover?", "leader": true } }
+      "placement": {
+        "mode": "free",
+        "x": -288,
+        "y": 272
+      },
+      "asset": {
+        "symbol": "callout",
+        "params": {
+          "text": "Why does a failed automated check take a phone call to recover?",
+          "leader": true
+        }
+      }
     },
     {
       "id": "ann-attrition",
       "type": "annotation",
       "label": "Physical-leg attrition",
       "anchorEntityId": "sys-booking",
-      "placement": { "mode": "free", "x": -320, "y": 608 },
-      "asset": { "symbol": "callout", "params": { "text": "How many drop out between booking and turning up?", "leader": true } }
+      "placement": {
+        "mode": "free",
+        "x": -320,
+        "y": 608
+      },
+      "asset": {
+        "symbol": "callout",
+        "params": {
+          "text": "How many drop out between booking and turning up?",
+          "leader": true
+        }
+      }
     }
   ]
 }

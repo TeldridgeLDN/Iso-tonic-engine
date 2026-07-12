@@ -123,6 +123,23 @@ declared in `layers`; rotation only 0–3; placements match asset kind (free
 for figurine/callout/route, grid for everything with a footprint); route
 stops all resolve, none reference another route, `stops.length >= 1`.
 
+### Verify visually
+
+Before handing the file over, actually LOOK at it — the mental checklist above
+catches structural errors, not layout ones (overlaps, callouts on top of
+districts, crowding). After writing `<name>.iso.json`:
+
+```bash
+npx vite-node scripts/preview-doc.ts <name>.iso.json /tmp/<name>.svg
+# macOS: rasterise so you can inspect it as an image
+qlmanage -t -s 1400 -o /tmp /tmp/<name>.svg   # → /tmp/<name>.svg.png
+```
+
+Open the PNG and check the whitespace doctrine holds visually: districts clearly
+separated with breathing room between them, callouts sitting in the margins (not
+over the plates), and nothing overlapping or clipped. If it looks crowded or
+tangled, adjust placements/footprints and re-render before handing it over.
+
 Write the file as `<kebab-name>.iso.json` where the user wants it (default:
 their current directory), then tell them: open the app → **Open** → pick the
 file. Offer one round of revisions after they've looked at it.

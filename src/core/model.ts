@@ -240,6 +240,14 @@ function transitiveParents(doc: SceneDocument, id: string): Entity[] {
  * Transitive children of an entity (excluding the entity itself).
  * Guards against cycles.
  */
+export function descendantsOf(doc: SceneDocument, id: string): Entity[] {
+  return transitiveChildren(doc, id);
+}
+
+/**
+ * Transitive children of an entity (excluding the entity itself).
+ * Guards against cycles.
+ */
 function transitiveChildren(doc: SceneDocument, id: string): Entity[] {
   const out: Entity[] = [];
   const seen = new Set<string>([id]);
