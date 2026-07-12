@@ -542,6 +542,22 @@ body {
 .iso-figurine-actions {
   margin: 8px 0;
 }
+.iso-height-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.iso-height-row .iso-range {
+  flex: 1;
+  min-width: 0;
+}
+.iso-range-value {
+  font-size: 10px;
+  color: var(--muted);
+  min-width: 34px;
+  text-align: right;
+  white-space: nowrap;
+}
 .iso-preset-apply {
   display: flex;
   align-items: center;

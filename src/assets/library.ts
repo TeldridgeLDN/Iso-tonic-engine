@@ -70,6 +70,7 @@ const figurineSchema: ParamField[] = [
   { key: 'top', label: 'Top', kind: 'select', options: opts(['shirt', 'jacket', 'hoodie', 'hiviz']) },
   { key: 'bottom', label: 'Bottom', kind: 'select', options: opts(['trousers', 'skirt', 'shorts']) },
   { key: 'accessory', label: 'Accessory', kind: 'select', options: opts(['none', 'hardhat', 'headset', 'clipboard']) },
+  { key: 'heightPx', label: 'Height (px)', kind: 'number', min: 24, max: 220 },
 ];
 
 const buildingSchema: ParamField[] = [

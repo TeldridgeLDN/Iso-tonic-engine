@@ -13,7 +13,15 @@ import {
   HAIR_COLORS,
   CLOTHING_COLORS,
 } from '../assets/style.ts';
-import { renderFigurine, defaultFigurine, randomFigurineParams } from '../assets/figurine.ts';
+import {
+  renderFigurine,
+  defaultFigurine,
+  randomFigurineParams,
+  BASE_HEIGHT_PX,
+  DEFAULT_HEIGHT_PX,
+  MIN_HEIGHT_PX,
+  MAX_HEIGHT_PX,
+} from '../assets/figurine.ts';
 import type { AppContext } from './context.ts';
 import { el, button, field, clear } from './dom.ts';
 
@@ -69,6 +77,7 @@ export class FigurineEditor {
       bottom: (p.bottom as string) ?? d.bottom,
       accessory: (p.accessory as string) ?? d.accessory,
       preset: p.preset as string | undefined,
+      heightPx: typeof p.heightPx === 'number' ? p.heightPx : d.heightPx,
     };
   }
 
@@ -83,6 +92,14 @@ export class FigurineEditor {
     this.render();
   }
 
+  /** Height is a size, not a part — changing it keeps any stamped preset. */
+  private patchHeight(heightPx: number): void {
+    if (!this.entity) return;
+    this.ctx.history.execute(new UpdateEntityProps(this.entity.id, { params: { heightPx } }));
+    this.refetch();
+    this.render();
+  }
+
   private refetch(): void {
     if (!this.entity) return;
     const fresh = this.ctx.document().entities.find((e) => e.id === this.entity!.id);
@@ -93,8 +110,9 @@ export class FigurineEditor {
     if (!this.entity) return;
     const p = this.params();
 
-    // Preview
-    this.preview.innerHTML = renderFigurine(p as unknown as Record<string, unknown>);
+    // Preview (rendered at base scale — the viewBox frames the authored size;
+    // heightPx only affects the on-canvas render)
+    this.preview.innerHTML = renderFigurine({ ...p, heightPx: BASE_HEIGHT_PX } as unknown as Record<string, unknown>);
 
     // Controls
     clear(this.controls);
@@ -106,7 +124,8 @@ export class FigurineEditor {
       selectRow('Bottom', BOTTOMS, p.bottom, (v) => this.patch({ bottom: v })),
       selectRow('Accessory', ACCESSORIES, p.accessory ?? 'none', (v) =>
         this.patch({ accessory: v })
-      )
+      ),
+      heightRow(p.heightPx ?? DEFAULT_HEIGHT_PX, (v) => this.patchHeight(v))
     );
 
     const randomiseBtn = button('🎲 Randomise', () => this.randomise(), 'iso-btn iso-btn-sm');
@@ -122,7 +141,8 @@ export class FigurineEditor {
     const params = randomFigurineParams(seed);
     this.ctx.history.execute(
       new UpdateEntityProps(this.entity.id, {
-        params: { ...params, preset: undefined },
+        // randomise swaps parts only — keep the current height
+        params: { ...params, heightPx: this.params().heightPx, preset: undefined },
       })
     );
     this.refetch();
@@ -215,6 +235,27 @@ function selectRow(
   }
   select.addEventListener('change', () => onChange(select.value));
   return field(label, select);
+}
+
+/** Height slider (px) with a live value readout. */
+function heightRow(current: number, onChange: (v: number) => void): HTMLElement {
+  const slider = el('input', {
+    class: 'iso-range',
+    attrs: {
+      type: 'range',
+      min: String(MIN_HEIGHT_PX),
+      max: String(MAX_HEIGHT_PX),
+      step: '2',
+      value: String(current),
+    },
+  }) as HTMLInputElement;
+  const readout = el('span', { class: 'iso-range-value', text: `${current}px` });
+  slider.addEventListener('input', () => {
+    readout.textContent = `${slider.value}px`;
+  });
+  slider.addEventListener('change', () => onChange(Number(slider.value)));
+  const wrap = el('div', { class: 'iso-height-row' }, [slider, readout]);
+  return field('Height', wrap);
 }
 
 /** A row of colour swatches for a palette (skin, hair colour). */

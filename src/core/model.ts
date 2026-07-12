@@ -57,6 +57,8 @@ export interface FigurineParams {
   bottom: string;
   accessory?: string;
   preset?: string;
+  /** Rendered standing height in scene px (default in assets/figurine.ts). */
+  heightPx?: number;
 }
 
 export interface BuildingParams {

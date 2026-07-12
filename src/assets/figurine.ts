@@ -24,7 +24,20 @@ export interface FigurineParams {
   bottom: string; // trousers | skirt | shorts
   accessory?: string; // hardhat | headset | clipboard | none
   preset?: string;
+  heightPx?: number; // rendered standing height in scene px (default DEFAULT_HEIGHT_PX)
 }
+
+/** Height the figurine geometry is authored at (feet 0 → head top ~ −46). */
+export const BASE_HEIGHT_PX = 46;
+/**
+ * Default rendered height. Chosen so a figurine reads at the same scale as the
+ * PNG people sprites (e.g. desk-workstation-v2's seated worker, whose 144px
+ * billboard puts a person at roughly this standing height).
+ */
+export const DEFAULT_HEIGHT_PX = 128;
+/** Bounds for the adjustable height (properties panel / schema). */
+export const MIN_HEIGHT_PX = 24;
+export const MAX_HEIGHT_PX = 220;
 
 // --- vertical layout (px up from feet at y=0) ---------------------------
 // Total ~46px. Head centre ~ -40, torso -18..-33, legs 0..-18.
@@ -323,8 +336,18 @@ export function renderFigurine(params?: Record<string, unknown>): string {
   // orientations: 2 — facing 1|3 mirror about the feet anchor (x=0). No text
   // inside the figurine, so a plain scale(-1,1) is safe.
   const o = readOrientation(params);
-  if (o === 1 || o === 3) return mirrorX(frags, 0);
-  return group(0, 0, frags);
+  const inner = o === 1 || o === 3 ? mirrorX(frags, 0) : group(0, 0, frags);
+  // Adaptable size: geometry is authored at BASE_HEIGHT_PX; scale about the
+  // feet origin so the standing point is unchanged.
+  const heightPx = clampHeight(p.heightPx);
+  const s = heightPx / BASE_HEIGHT_PX;
+  if (s === 1) return inner;
+  return `<g transform="scale(${n(s)})">${inner}</g>`;
+}
+
+function clampHeight(h: number | undefined): number {
+  if (typeof h !== 'number' || !Number.isFinite(h) || h <= 0) return DEFAULT_HEIGHT_PX;
+  return Math.min(MAX_HEIGHT_PX, Math.max(MIN_HEIGHT_PX, h));
 }
 
 function normalize(params?: Record<string, unknown>): FigurineParams {
@@ -338,6 +361,7 @@ function normalize(params?: Record<string, unknown>): FigurineParams {
     bottom: (params.bottom as string) ?? d.bottom,
     accessory: (params.accessory as string) ?? d.accessory,
     preset: params.preset as string | undefined,
+    heightPx: typeof params.heightPx === 'number' ? params.heightPx : d.heightPx,
   };
 }
 
