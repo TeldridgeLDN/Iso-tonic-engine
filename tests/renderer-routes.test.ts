@@ -140,6 +140,109 @@ describe('route rendering — label', () => {
   });
 });
 
+const DOT = '·';
+
+/** x attribute of the <text> whose content is exactly `label`. */
+function textX(svg: string, label: string): number {
+  const re = new RegExp(`<text x="(-?[\\d.]+)"[^>]*>${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</text>`);
+  const m = re.exec(svg);
+  if (!m) throw new Error(`no <text> found for label ${JSON.stringify(label)}`);
+  return Number(m[1]);
+}
+
+/** Substring of the fragment for the <g> carrying data-entity-id="id". */
+function groupSlice(svg: string, id: string): string {
+  const start = svg.indexOf(`data-entity-id="${id}"`);
+  if (start < 0) throw new Error(`no group for ${id}`);
+  const next = svg.indexOf('data-entity-id="', start + 1);
+  return svg.slice(start, next < 0 ? undefined : next);
+}
+
+describe('route rendering — compound badges', () => {
+  it('uses plain "s" badges when the document has a single route', () => {
+    const doc = docWith([
+      route('r', [
+        { x: 0, y: 0 },
+        { x: 40, y: 20 },
+      ]),
+    ]);
+    const svg = renderSceneToString(doc);
+    expect(svg).toContain('>1</text>');
+    expect(svg).toContain('>2</text>');
+    expect(svg).not.toContain(DOT); // no compound "r·s" with one route
+  });
+
+  it('uses compound "r·s" badges when the document has more than one route', () => {
+    const doc = docWith([
+      route('r1', [
+        { x: 0, y: 0 },
+        { x: 40, y: 20 },
+      ]),
+      route('r2', [{ x: 80, y: 0 }]),
+    ]);
+    const svg = renderSceneToString(doc);
+    expect(svg).toContain(`>1${DOT}1</text>`); // route 1, stop 1
+    expect(svg).toContain(`>1${DOT}2</text>`); // route 1, stop 2
+    expect(svg).toContain(`>2${DOT}1</text>`); // route 2, stop 1
+    expect(svg).not.toContain('>1</text>'); // no plain badges in multi-route mode
+  });
+
+  it('numbers the route by its 1-based position among route entities in document order', () => {
+    const doc = docWith([
+      ent({ id: 'scene', type: 'territory' }), // non-route entities are ignored
+      route('first', [{ x: 0, y: 0 }]),
+      route('second', [{ x: 50, y: 0 }]),
+    ]);
+    const svg = renderSceneToString(doc);
+    expect(svg).toContain(`>1${DOT}1</text>`); // 'first' → route index 1
+    expect(svg).toContain(`>2${DOT}1</text>`); // 'second' → route index 2
+  });
+});
+
+describe('route rendering — shared-stop fan-out', () => {
+  // Anchor entity at grid (0,0) → tileToScreen(0,0) = (0,0). Two routes stop
+  // there; a third stops elsewhere.
+  function sharedDoc(): SceneDocument {
+    return docWith([
+      ent({ id: 'e', type: 'digital-infra', placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 1, d: 1 } } }),
+      route('rA', [{ entityId: 'e' }, { x: 100, y: 0 }]),
+      route('rB', [{ entityId: 'e' }, { x: 100, y: 50 }]),
+      route('rC', [
+        { x: 200, y: 0 },
+        { x: 200, y: 50 },
+      ]),
+    ]);
+  }
+
+  it('offsets each route’s badge at a shared entity stop to distinct, symmetric, ordered coordinates', () => {
+    const svg = renderSceneToString(sharedDoc());
+    const ax = textX(svg, `1${DOT}1`); // rA at 'e'
+    const bx = textX(svg, `2${DOT}1`); // rB at 'e'
+    expect(ax).not.toBe(bx); // no longer stacked
+    expect(ax).toBeLessThan(bx); // deterministic: earlier route to the left
+    expect(ax).toBeCloseTo(-bx, 6); // centred about the anchor (x=0)
+  });
+
+  it('leaves a route that does not share the stop unaffected (badge stays at its anchor)', () => {
+    const svg = renderSceneToString(sharedDoc());
+    // rC's first waypoint is the free point (200,0); it is in no shared group.
+    expect(textX(svg, `3${DOT}1`)).toBe(200);
+  });
+
+  it('moves the path vertex together with its badge at a shared stop', () => {
+    const svg = renderSceneToString(sharedDoc());
+    const ax = textX(svg, `1${DOT}1`);
+    // rA's polyline first vertex must carry the same offset as its badge.
+    expect(groupSlice(svg, 'rA')).toContain(`points="${ax},0 100,0"`);
+  });
+
+  it('never offsets a free (non-entity-anchored) waypoint even under multi-route', () => {
+    const svg = renderSceneToString(sharedDoc());
+    // rA's second stop is a free point (100,0) shared with nobody → unmoved.
+    expect(textX(svg, `1${DOT}2`)).toBe(100);
+  });
+});
+
 describe('route rendering — spotlight dimming', () => {
   it('dims a route group that is not in the spotlight set', () => {
     const doc = docWith([

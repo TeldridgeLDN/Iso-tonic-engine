@@ -52,10 +52,15 @@ function round(v: number): number {
 }
 
 /** SVG fragment for one entity (its <g> wrapper + stamped asset). */
-function renderEntity(entity: Entity, doc: SceneDocument, view: ViewState): string {
+function renderEntity(
+  entity: Entity,
+  doc: SceneDocument,
+  view: ViewState,
+  fanout: RouteFanout
+): string {
   // Routes are drawn from resolved world-space waypoints, not the asset
   // registry — their geometry spans the scene rather than sitting at one origin.
-  if (entity.type === 'route') return renderRoute(entity, doc, view);
+  if (entity.type === 'route') return renderRoute(entity, doc, view, fanout);
 
   const def = getAsset(entity.asset.symbol);
   const fragment = def ? def.render(renderParams(entity)) : missingGlyph();
@@ -87,12 +92,101 @@ function renderEntity(entity: Entity, doc: SceneDocument, view: ViewState): stri
 const ROUTE_STROKE = 2;
 const ROUTE_CASING = 4; // white casing width beneath the accent line
 const ROUTE_DASH = '6 4';
-const BADGE_R = 9; // step-badge radius in world px
+const BADGE_R = 9; // step-badge radius (and pill half-height) in world px
+const BADGE_CHAR_W = 5.5; // approx advance per glyph at size 9 bold, world px
+const BADGE_PAD_X = 5; // horizontal padding each side of the pill text
+const BADGE_MIDDOT = '·'; // separator in compound "r·s" badges
+
+// --- shared-stop fan-out ---------------------------------------------------
+
+/**
+ * Per-route, per-stop world-px offset applied to BOTH the badge and the path
+ * vertex so routes converging on the same entity sit side-by-side instead of
+ * stacking. Keyed by route entity id; the inner array is parallel to that
+ * route's resolved stops. Empty map ⇒ no offsets (single-route documents).
+ */
+type RouteFanout = Map<string, Array<{ dx: number; dy: number }>>;
+
+/** The type 'route' entities of a document, in document order. */
+function routeEntities(doc: SceneDocument): Entity[] {
+  return doc.entities.filter((e) => e.type === 'route');
+}
+
+/** Rendered pill width (world px) for a badge label — grows to fit the text. */
+function badgeWidth(label: string): number {
+  return Math.max(BADGE_R * 2, label.length * BADGE_CHAR_W + BADGE_PAD_X * 2);
+}
+
+/**
+ * Compute the fan-out offsets for every route in the document.
+ *
+ * A stop is offset only when it is entity-anchored AND that entity is a stop of
+ * two or more DISTINCT routes. Members of such a shared group are ordered by
+ * route document index and centred: route at position `p` in a group of size
+ * `n` shifts by `(p − (n−1)/2) · step` horizontally, where `step` is the widest
+ * member badge + 2px so the pills sit side-by-side with a small gap. Free
+ * (non-entity) stops are never offset. Deterministic across renders (document
+ * order is stable).
+ */
+function computeRouteFanout(doc: SceneDocument): RouteFanout {
+  const out: RouteFanout = new Map();
+  const routes = routeEntities(doc);
+  if (routes.length < 2) return out; // single route: plain badges, no fan-out
+
+  // Resolve every route once; entity-anchored stops carry their entityId.
+  const resolved = routes.map((r) => resolveRouteStops(doc, r));
+
+  // entityId → ordered distinct route indices that anchor a stop there.
+  const groups = new Map<string, number[]>();
+  resolved.forEach((stops, ri) => {
+    const seen = new Set<string>();
+    for (const s of stops) {
+      if (s.entityId === undefined || seen.has(s.entityId)) continue;
+      seen.add(s.entityId);
+      const arr = groups.get(s.entityId) ?? [];
+      arr.push(ri); // ascending ri ⇒ document order preserved
+      groups.set(s.entityId, arr);
+    }
+  });
+
+  // Step (world px) for a shared group: widest member badge + 2.
+  const groupStep = (entityId: string, members: number[]): number => {
+    let maxW = 0;
+    for (const ri of members) {
+      const idx = resolved[ri].findIndex((s) => s.entityId === entityId);
+      maxW = Math.max(maxW, badgeWidth(`${ri + 1}${BADGE_MIDDOT}${idx + 1}`));
+    }
+    return maxW + 2;
+  };
+
+  routes.forEach((r, ri) => {
+    const offsets = resolved[ri].map((s) => {
+      if (s.entityId === undefined) return { dx: 0, dy: 0 };
+      const members = groups.get(s.entityId);
+      if (!members || members.length < 2) return { dx: 0, dy: 0 };
+      const pos = members.indexOf(ri);
+      const centred = pos - (members.length - 1) / 2;
+      return { dx: round(centred * groupStep(s.entityId, members)), dy: 0 };
+    });
+    out.set(r.id, offsets);
+  });
+  return out;
+}
 
 /**
  * A route entity renders as a dashed ACCENT polyline through its resolved
  * waypoints, a numbered step badge at each waypoint, and a label near the
  * entity's placement position.
+ *
+ * BADGE NUMBERING: with a single route each badge shows its plain 1-based stop
+ * index `s`; with two or more routes it shows `<r>·<s>`, where `r` is the
+ * route's 1-based position among route entities in document order — so a stop
+ * shared by several journeys tells the reader which journey it belongs to.
+ *
+ * FAN-OUT: where two or more routes converge on the same entity, `fanout` shifts
+ * each route's waypoint sideways so the badges (and the dashed lines feeding
+ * them) separate instead of stacking. The offset is added to the resolved stop
+ * coords BEFORE drawing, so the path vertex and its badge always move together.
  *
  * COORDINATE SPACE: unlike other entities, the route's <g> carries NO translate
  * transform. `resolveRouteStops` (and the free placement that positions the
@@ -105,7 +199,12 @@ const BADGE_R = 9; // step-badge radius in world px
  * With fewer than two resolvable waypoints no path is drawn; with none, only
  * the (empty) wrapper <g> is emitted.
  */
-function renderRoute(entity: Entity, doc: SceneDocument, view: ViewState): string {
+function renderRoute(
+  entity: Entity,
+  doc: SceneDocument,
+  view: ViewState,
+  fanout: RouteFanout
+): string {
   const attrs: string[] = [`data-entity-id="${entity.id}"`];
   if (view.hoverId === entity.id) attrs.push('data-hover="true"');
   if (view.selectedIds?.has(entity.id)) attrs.push('data-selected="true"');
@@ -113,11 +212,22 @@ function renderRoute(entity: Entity, doc: SceneDocument, view: ViewState): strin
     attrs.push(`opacity="${DIM}"`);
   }
 
-  const stops = resolveRouteStops(doc, entity);
-  const frags: string[] = [];
+  const routes = routeEntities(doc);
+  const multi = routes.length > 1;
+  const routeIndex = routes.findIndex((e) => e.id === entity.id); // 0-based
 
+  const offsets = fanout.get(entity.id) ?? [];
+  const stops = resolveRouteStops(doc, entity).map((p, i) => ({
+    x: p.x + (offsets[i]?.dx ?? 0),
+    y: p.y + (offsets[i]?.dy ?? 0),
+  }));
+
+  const frags: string[] = [];
   if (stops.length >= 2) frags.push(routePath(stops));
-  stops.forEach((p, i) => frags.push(routeBadge(p.x, p.y, i + 1)));
+  stops.forEach((p, i) => {
+    const label = multi ? `${routeIndex + 1}${BADGE_MIDDOT}${i + 1}` : String(i + 1);
+    frags.push(routeBadge(p.x, p.y, label, multi));
+  });
   if (stops.length >= 1) {
     const origin = entityOrigin(entity);
     frags.push(routeLabel(origin.x, origin.y, entity.label));
@@ -139,19 +249,48 @@ function routePath(stops: Array<{ x: number; y: number }>): string {
   return casing + accent;
 }
 
-/** Numbered step badge: ACCENT disc, white outline, white 1-based number. */
-function routeBadge(x: number, y: number, step: number): string {
+/**
+ * Numbered step badge: white-outlined ACCENT shape with the white label. A plain
+ * single-route badge stays a disc (radius BADGE_R); a compound "r·s" badge grows
+ * to a stadium/pill so the wider text fits while keeping the single ACCENT
+ * colour of the style contract.
+ */
+function routeBadge(x: number, y: number, label: string, wide: boolean): string {
   const cx = round(x);
   const cy = round(y);
+  const shape = wide
+    ? badgePill(cx, cy, badgeWidth(label))
+    : circle({ x: cx, y: cy }, BADGE_R, { fill: ACCENT, stroke: PAPER, strokeWidth: 1.5 });
   return (
-    circle({ x: cx, y: cy }, BADGE_R, { fill: ACCENT, stroke: PAPER, strokeWidth: 1.5 }) +
-    text(cx, cy + 3.2, String(step), {
+    shape +
+    text(cx, cy + 3.2, label, {
       size: 9,
       weight: 'bold',
       fill: PAPER,
       anchor: 'middle',
     })
   );
+}
+
+/**
+ * A horizontal stadium (pill) of width `w` and height 2·BADGE_R centred at
+ * (cx,cy), drawn as a <path> of two straight edges + two semicircular arcs so it
+ * stays within the svg2pdf dialect (like primitives.ellipse). ACCENT fill, white
+ * outline — matches the disc badge's treatment.
+ */
+function badgePill(cx: number, cy: number, w: number): string {
+  const r = BADGE_R;
+  const half = Math.max(0, w / 2 - r); // half-length of the straight top/bottom
+  const xl = round(cx - half);
+  const xr = round(cx + half);
+  const yt = round(cy - r);
+  const yb = round(cy + r);
+  const d =
+    `M ${xl} ${yt} L ${xr} ${yt} ` +
+    `A ${r} ${r} 0 0 1 ${xr} ${yb} ` +
+    `L ${xl} ${yb} ` +
+    `A ${r} ${r} 0 0 1 ${xl} ${yt} Z`;
+  return `<path d="${d}" fill="${ACCENT}" stroke="${PAPER}" stroke-width="1.5" stroke-linejoin="round"/>`;
 }
 
 /** Route label in the app's callout style (small bold ACCENT text). */
@@ -254,9 +393,10 @@ export function renderScene(
 
   const visible = doc.entities.filter((e) => isEntityVisible(doc, e));
   const ordered = sortForRender(visible, isGroundAsset); // ground plates → scene → annotations
+  const fanout = computeRouteFanout(doc);
 
   for (const entity of ordered) {
-    parts.push(renderEntity(entity, doc, view));
+    parts.push(renderEntity(entity, doc, view, fanout));
   }
 
   if (view.resizeHandleFor) parts.push(renderResizeHandle(view.resizeHandleFor));
@@ -291,7 +431,8 @@ export function renderSceneToString(doc: SceneDocument, view: ViewState = {}): s
   const parts: string[] = [];
   if (view.showGrid) parts.push(renderGridDots(doc));
   const visible = doc.entities.filter((e) => isEntityVisible(doc, e));
+  const fanout = computeRouteFanout(doc);
   for (const entity of sortForRender(visible, isGroundAsset))
-    parts.push(renderEntity(entity, doc, view));
+    parts.push(renderEntity(entity, doc, view, fanout));
   return parts.join('');
 }
