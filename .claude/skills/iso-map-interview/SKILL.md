@@ -97,9 +97,12 @@ visually — always err toward MORE space. Apply exactly:
 - Every entity: semantic `type`, real `label`, `description` for tooltips,
   `parentId` chains (person → team → organisation). Goal fields
   (`userGoal`/`orgGoal`) no longer exist — fold goals into `description`.
-- Figurines: `asset.params` per FigurineParams — vary skin/hair/clothes;
-  uniforms where the interview said so. Define `figurinePresets` for repeated
-  staff types.
+- Figurines: `asset.params` per FigurineParams — vary skin/hair/clothes
+  BETWEEN journeys and groups; uniforms where the interview said so. Define
+  `figurinePresets` for repeated staff types. **One persona per journey:**
+  when the same person appears at multiple stages of a journey, reuse
+  byte-identical figurine params at every stage — the reader must recognise
+  them as the same human walking the route, not a new character per stage.
 - Callouts: `annotation` type, `anchorEntityId` + `params.leader: true` when
   tied to something specific.
 - Journeys: `route` type — one entity per journey, rendered as a numbered

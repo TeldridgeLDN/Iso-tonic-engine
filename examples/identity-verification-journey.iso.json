@@ -723,25 +723,25 @@
       "id": "cit-2",
       "type": "user",
       "label": "Digitally-confident citizen",
-      "description": "Self-serves end-to-end on laptop and phone.",
+      "description": "The same citizen at the end of the straight-through path — identity proven, claim paid.",
       "placement": {
         "mode": "free",
-        "x": 0,
-        "y": 128,
+        "x": 710,
+        "y": 525,
         "rotation": 1
       },
       "asset": {
         "symbol": "figurine",
         "params": {
-          "skin": "tone-4",
-          "hairStyle": "bun",
-          "hairColor": "brown",
-          "top": "shirt",
-          "bottom": "skirt"
+          "skin": "tone-2",
+          "hairStyle": "short",
+          "hairColor": "black",
+          "top": "hoodie",
+          "bottom": "trousers"
         }
       },
       "userGoal": "Prove my identity in one sitting and get the claim in.",
-      "parentId": "terr-home"
+      "parentId": "org-benefits"
     },
     {
       "id": "cit-3",
@@ -780,10 +780,10 @@
       "asset": {
         "symbol": "figurine",
         "params": {
-          "skin": "tone-3",
-          "hairStyle": "long",
-          "hairColor": "black",
-          "top": "shirt",
+          "skin": "tone-1",
+          "hairStyle": "curly",
+          "hairColor": "grey",
+          "top": "jacket",
           "bottom": "trousers"
         }
       },
