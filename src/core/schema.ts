@@ -404,6 +404,14 @@ function validateRoute(
       errors.push(
         `entities[${i}].asset.params.stops[${j}] must be {entityId} or {x, y}`
       );
+      return;
+    }
+    // Optional per-stop caption: a short story beat rendered under the badge.
+    // When present it must be a string (absent = plain badge, backward compatible).
+    if (isObject(stop) && stop.caption !== undefined && typeof stop.caption !== 'string') {
+      errors.push(
+        `entities[${i}].asset.params.stops[${j}].caption must be a string`
+      );
     }
   });
 }

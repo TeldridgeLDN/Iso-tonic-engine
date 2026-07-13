@@ -114,7 +114,11 @@ visually — always err toward MORE space. Apply exactly:
   world-px formula as free placements). Stops are numbered 1..n in order;
   ≥ 2 stops for a visible path. Set the route's free placement at the first
   stop's position. A stop's `entityId` must resolve and must not be another
-  route. Present-mode spotlight lights a route together with its stop entities.
+  route. A stop may also carry an optional `caption` (short string, ~2–4 words)
+  rendered under that stop's badge: when the interview marks a beat on a stop —
+  a failure, a hand-off, a rescue ("match fails", "rescued by phone") — carry it
+  into that stop's `caption`. Only for pivotal beats, never every stop.
+  Present-mode spotlight lights a route together with its stop entities.
 - 2–4 custom layers if natural (e.g. "Front of house", "Back of house",
   "Future state") — they double as spotlight groups in Present mode.
 

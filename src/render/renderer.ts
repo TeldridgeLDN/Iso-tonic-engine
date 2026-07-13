@@ -104,6 +104,8 @@ const BADGE_CHAR_W = 5.5; // approx advance per glyph at size 9 bold, world px
 const BADGE_PAD_X = 5; // horizontal padding each side of the pill text
 const BADGE_MIDDOT = '·'; // separator in compound "r·s" badges
 const BADGE_DROP_GAP = 4; // few-px clearance below the footprint south corner
+const CAPTION_SIZE = 8; // per-stop caption text size (subordinate to the size-9 label)
+const CAPTION_GAP = 2; // clearance between the badge pill bottom and the caption
 
 // --- shared-stop fan-out ---------------------------------------------------
 
@@ -260,7 +262,23 @@ function renderRoute(
   if (stops.length >= 2) frags.push(routePath(stops));
   stops.forEach((p, i) => {
     const label = multi ? `${routeIndex + 1}${BADGE_MIDDOT}${i + 1}` : String(i + 1);
-    frags.push(routeBadge(p.x, p.y + badgeDrop(doc, resolved[i].entityId), label, multi));
+    const badgeCy = p.y + badgeDrop(doc, resolved[i].entityId);
+    frags.push(routeBadge(p.x, badgeCy, label, multi));
+    // A pivotal-beat caption sits immediately below THIS badge — same x-centre
+    // (fan-out offset already in p.x) and below the dropped badge (badgeCy), so
+    // it moves with the badge by construction. EXCEPT when two or more routes
+    // carry an IDENTICAL caption at the same shared anchor: captions are wider
+    // than the badge-width fan-out step, so the duplicates would collide —
+    // instead the caption renders ONCE, centred on the group's un-fanned anchor
+    // x (resolved[i].x, no dx), below the badge row (the y is shared: same
+    // anchor entity ⇒ same badgeDrop for every member).
+    const caption = resolved[i].caption;
+    if (caption) {
+      const mode = captionMode(doc, view, entity.id, resolved[i].entityId, caption);
+      if (mode === 'own') frags.push(routeCaption(p.x, badgeCy, caption));
+      else if (mode === 'leader') frags.push(routeCaption(resolved[i].x, badgeCy, caption));
+      // 'suppressed': the group's leader route renders the merged caption.
+    }
   });
   if (stops.length >= 1) {
     const origin = entityOrigin(entity);
@@ -325,6 +343,52 @@ function badgePill(cx: number, cy: number, w: number): string {
     `L ${xl} ${yb} ` +
     `A ${r} ${r} 0 0 1 ${xl} ${yt} Z`;
   return `<path d="${d}" fill="${ACCENT}" stroke="${PAPER}" stroke-width="1.5" stroke-linejoin="round"/>`;
+}
+
+/**
+ * How a captioned stop renders its caption:
+ * - 'own'        — per-badge, at the badge's fanned x (the normal case);
+ * - 'leader'     — this route renders the MERGED caption once, at the group's
+ *                  un-fanned anchor x, on behalf of every identical sharer;
+ * - 'suppressed' — an identical sharer (the leader) renders it instead.
+ *
+ * Two or more routes carrying the IDENTICAL caption string at the same shared
+ * entity anchor merge; different captions at a shared anchor stay per-badge.
+ * Free (non-entity) stops are never shared, so they are always 'own'. The
+ * leader is the first sharer in document order that is not hidden in the
+ * Journeys panel, so hiding the leader route does not hide the merged caption.
+ */
+function captionMode(
+  doc: SceneDocument,
+  view: ViewState,
+  routeId: string,
+  entityId: string | undefined,
+  caption: string
+): 'own' | 'leader' | 'suppressed' {
+  if (entityId === undefined) return 'own';
+  const sharers = routeEntities(doc).filter((r) =>
+    resolveRouteStops(doc, r).some(
+      (s) => s.entityId === entityId && s.caption === caption
+    )
+  );
+  if (sharers.length < 2) return 'own';
+  const leader = sharers.find((r) => !isRouteHidden(view, r)) ?? sharers[0];
+  return leader.id === routeId ? 'leader' : 'suppressed';
+}
+
+/**
+ * Per-stop caption: small ACCENT text centred under a stop's badge, one story
+ * beat ("match fails"). `y` is the badge centre; the caption baseline sits below
+ * the pill (badge half-height BADGE_R + a small gap + the cap height), so it
+ * never overlaps the label and rides the badge's fan-out + drop offsets. Lighter
+ * than routeLabel (normal weight, size 8) so it reads as subordinate.
+ */
+function routeCaption(x: number, y: number, caption: string): string {
+  return text(round(x), round(y) + BADGE_R + CAPTION_GAP + CAPTION_SIZE, caption, {
+    size: CAPTION_SIZE,
+    fill: ACCENT,
+    anchor: 'middle',
+  });
 }
 
 /** Route label in the app's callout style (small bold ACCENT text). */

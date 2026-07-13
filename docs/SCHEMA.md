@@ -98,8 +98,14 @@ interface CalloutParams {
 }
 
 type RouteStop =
-  | { entityId: string }           // ride an existing entity's placement position
-  | { x: number; y: number };      // a free world-px waypoint
+  | { entityId: string; caption?: string }   // ride an existing entity's placement position
+  | { x: number; y: number; caption?: string };  // a free world-px waypoint
+// caption: optional short story beat (~40 chars) rendered under this stop's
+// badge in ACCENT — e.g. "match fails", "rescued by phone". Only for pivotal
+// beats (a failure / hand-off / rescue), not every stop. Absent = plain badge.
+// IDENTICAL captions on several routes at the same shared stop are merged and
+// rendered once, centred under the badge row; DIFFERENT captions at a shared
+// stop still render per-badge — avoid wide distinct duplicates there.
 
 interface RouteParams {
   stops: RouteStop[];              // >= 1; ordered path through stops
@@ -126,7 +132,8 @@ coords (see core `resolveRouteStops`).
   array (length >= 1) where each stop is `{entityId}` or `{x, y}`; a malformed
   stops shape is rejected (structural, like placement). A stop `entityId` that
   is dangling or references another route is a warning, not a rejection (like
-  footprint overlap); `resolveRouteStops` skips such stops.
+  footprint overlap); `resolveRouteStops` skips such stops. A stop's optional
+  `caption` must be a string when present (rejected otherwise, structural).
 - Spotlight lights route linkage one hop: a focal route additionally lights its
   stop entities; a focal non-route additionally lights every route that lists it
   as a stop. No further transitivity through routes.

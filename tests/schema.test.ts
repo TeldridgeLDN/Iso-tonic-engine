@@ -329,6 +329,31 @@ describe('validateDocument — route entities', () => {
     expect(res.ok).toBe(true);
     expect(res.warnings.some((w) => w.includes('another route "r2"'))).toBe(true);
   });
+
+  it('accepts a stop carrying a string caption', () => {
+    const doc = baseDoc();
+    doc.entities = [
+      { id: 'a', type: 'user', label: 'a', placement: { mode: 'free', x: 0, y: 0 }, asset: { symbol: 'figurine' } },
+      routeEntity({
+        asset: {
+          symbol: 'route-path',
+          params: { stops: [{ entityId: 'a', caption: 'match fails' }, { x: 10, y: 20, caption: 'books a visit' }] },
+        },
+      }),
+    ];
+    const res = validateDocument(doc);
+    expect(res.ok).toBe(true);
+  });
+
+  it('rejects a stop whose caption is not a string', () => {
+    const doc = baseDoc();
+    doc.entities = [
+      routeEntity({ asset: { symbol: 'route-path', params: { stops: [{ x: 0, y: 0, caption: 42 }] } } }),
+    ];
+    const res = validateDocument(doc);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.errors.some((e) => e.includes('stops[0].caption must be a string'))).toBe(true);
+  });
 });
 
 describe('unknown-field preservation through migrate + validate', () => {

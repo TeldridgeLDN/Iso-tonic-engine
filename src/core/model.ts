@@ -76,8 +76,14 @@ export interface CalloutParams {
   leader?: boolean;
 }
 
-/** A single stop on a route: either an existing entity, or a free world-px point. */
-export type RouteStop = { entityId: string } | { x: number; y: number };
+/**
+ * A single stop on a route: either an existing entity, or a free world-px point.
+ * An optional `caption` renders a short story beat under that stop's badge (e.g.
+ * "match fails"); absent caption = a plain badge (backward compatible).
+ */
+export type RouteStop =
+  | { entityId: string; caption?: string }
+  | { x: number; y: number; caption?: string };
 
 export interface RouteParams {
   stops: RouteStop[];
@@ -195,24 +201,32 @@ function isObjectRecord(v: unknown): v is Record<string, unknown> {
 export function resolveRouteStops(
   doc: SceneDocument,
   route: Entity
-): Array<{ x: number; y: number; entityId?: string }> {
-  const out: Array<{ x: number; y: number; entityId?: string }> = [];
+): Array<{ x: number; y: number; entityId?: string; caption?: string }> {
+  const out: Array<{ x: number; y: number; entityId?: string; caption?: string }> = [];
   for (const stop of routeStops(route)) {
     if (!isObjectRecord(stop)) continue;
+    // Preserve a well-formed caption; only set the key when present so callers
+    // that structurally compare captionless stops are unaffected.
+    const caption = typeof stop.caption === 'string' ? stop.caption : undefined;
     if (typeof stop.entityId === 'string') {
       const target = byId(doc, stop.entityId);
       if (!target || target.type === 'route') continue; // dangling or route → skip
       const p = target.placement;
       const pt =
         p.mode === 'grid' ? tileToScreen(p.x, p.y) : { x: p.x, y: p.y };
-      out.push({ x: pt.x, y: pt.y, entityId: stop.entityId });
+      const resolved: { x: number; y: number; entityId?: string; caption?: string } =
+        { x: pt.x, y: pt.y, entityId: stop.entityId };
+      if (caption !== undefined) resolved.caption = caption;
+      out.push(resolved);
     } else if (
       typeof stop.x === 'number' &&
       Number.isFinite(stop.x) &&
       typeof stop.y === 'number' &&
       Number.isFinite(stop.y)
     ) {
-      out.push({ x: stop.x, y: stop.y });
+      const resolved: { x: number; y: number; caption?: string } = { x: stop.x, y: stop.y };
+      if (caption !== undefined) resolved.caption = caption;
+      out.push(resolved);
     }
   }
   return out;

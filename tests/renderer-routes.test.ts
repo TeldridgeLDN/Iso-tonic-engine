@@ -325,6 +325,114 @@ describe('route rendering — shared-stop fan-out', () => {
   });
 });
 
+describe('route rendering — per-stop captions', () => {
+  // Grid entity 'g' at (2,3); a route stops on it then at a free point.
+  function capDoc(caption?: string, footprint = { w: 1, d: 1 }): SceneDocument {
+    const stop: RouteStop = caption
+      ? { entityId: 'g', caption }
+      : { entityId: 'g' };
+    return docWith([
+      ent({ id: 'g', type: 'territory', placement: { mode: 'grid', x: 2, y: 3, footprint } }),
+      route('r', [stop, { x: 100, y: 100 }]),
+    ]);
+  }
+
+  /** {x,y} of the <text> whose content is exactly `s`. */
+  function textPos(svg: string, s: string): { x: number; y: number } {
+    const re = new RegExp(
+      `<text x="(-?[\\d.]+)" y="(-?[\\d.]+)"[^>]*>${s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</text>`
+    );
+    const m = re.exec(svg);
+    if (!m) throw new Error(`no <text> for ${JSON.stringify(s)}`);
+    return { x: Number(m[1]), y: Number(m[2]) };
+  }
+
+  /** cy of the badge disc whose cx equals `cx`. */
+  function discCy(svg: string, cx: number): number {
+    const m = new RegExp(`cx="${cx}" cy="(-?[\\d.]+)"`).exec(svg);
+    if (!m) throw new Error(`no disc at cx=${cx}`);
+    return Number(m[1]);
+  }
+
+  it('emits the caption text centred under the stop badge', () => {
+    const svg = renderSceneToString(capDoc('match fails'));
+    expect(svg).toContain('>match fails</text>');
+    const anchor = tileToScreen(2, 3);
+    const cap = textPos(svg, 'match fails');
+    // Single route → no fan-out: caption shares the badge's x-centre (anchor x).
+    expect(cap.x).toBe(anchor.x);
+    // Caption sits BELOW the (dropped) badge centre, clear of the pill.
+    expect(cap.y).toBeGreaterThan(discCy(svg, anchor.x));
+  });
+
+  it('renders the caption smaller than the size-9 route label (subordinate)', () => {
+    const svg = renderSceneToString(capDoc('match fails'));
+    // caption text node carries font-size="8"
+    expect(svg).toMatch(/font-size="8"[^>]*>match fails<\/text>/);
+  });
+
+  it('emits no caption text node when the stop has none', () => {
+    const svg = renderSceneToString(capDoc());
+    expect(svg).not.toContain('match fails');
+    // Only the two badges + the route label remain (no extra text node).
+    const texts = svg.match(/<text /g) ?? [];
+    expect(texts.length).toBe(3);
+  });
+
+  it('applies the fan-out offset to the caption x when no other route shares it', () => {
+    // Two routes converge on 'e'; only rA's shared stop carries a caption, so
+    // the caption stays per-badge and rides rA's fanned badge x.
+    const doc = docWith([
+      ent({ id: 'e', type: 'digital-infra', placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 1, d: 1 } } }),
+      route('rA', [{ entityId: 'e', caption: 'match fails' }, { x: 100, y: 0 }]),
+      route('rB', [{ entityId: 'e' }, { x: 100, y: 50 }]),
+    ]);
+    const svg = renderSceneToString(doc);
+    const badgeX = textX(svg, `1${DOT}1`); // rA badge at 'e', fanned off the anchor (x=0)
+    expect(badgeX).not.toBe(0); // proves it is fanned out
+    expect(textPos(svg, 'match fails').x).toBe(badgeX); // caption carries the same offset
+  });
+
+  it('drops the caption with the badge (deeper footprint → caption lower)', () => {
+    const shallow = textPos(renderSceneToString(capDoc('match fails', { w: 1, d: 1 })), 'match fails');
+    const deep = textPos(renderSceneToString(capDoc('match fails', { w: 2, d: 3 })), 'match fails');
+    expect(deep.y).toBeGreaterThan(shallow.y);
+  });
+
+  it('merges IDENTICAL captions at a shared anchor into ONE text node at the un-fanned anchor x', () => {
+    const doc = docWith([
+      ent({ id: 'e', type: 'digital-infra', placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 1, d: 1 } } }),
+      route('rA', [{ entityId: 'e', caption: 'match fails' }, { x: 100, y: 0 }]),
+      route('rB', [{ entityId: 'e', caption: 'match fails' }, { x: 100, y: 50 }]),
+    ]);
+    const svg = renderSceneToString(doc);
+    // Exactly ONE caption text node for the group.
+    expect(svg.match(/>match fails<\/text>/g)?.length).toBe(1);
+    // Centred on the group's overall centre = the un-fanned anchor x (0), NOT a
+    // fanned badge x.
+    const cap = textPos(svg, 'match fails');
+    expect(cap.x).toBe(0);
+    expect(textX(svg, `1${DOT}1`)).not.toBe(0); // badges themselves stay fanned
+    // Below the badge row (same drop for all members of the group).
+    const anchor = tileToScreen(0, 0);
+    expect(cap.y).toBeGreaterThan(anchor.y);
+  });
+
+  it('keeps DIFFERENT captions at a shared anchor per-badge (two nodes at their fanned x)', () => {
+    const doc = docWith([
+      ent({ id: 'e', type: 'digital-infra', placement: { mode: 'grid', x: 0, y: 0, footprint: { w: 1, d: 1 } } }),
+      route('rA', [{ entityId: 'e', caption: 'match fails' }, { x: 100, y: 0 }]),
+      route('rB', [{ entityId: 'e', caption: 'goes manual' }, { x: 100, y: 50 }]),
+    ]);
+    const svg = renderSceneToString(doc);
+    expect(svg.match(/>match fails<\/text>/g)?.length).toBe(1);
+    expect(svg.match(/>goes manual<\/text>/g)?.length).toBe(1);
+    // Each caption rides its OWN fanned badge.
+    expect(textPos(svg, 'match fails').x).toBe(textX(svg, `1${DOT}1`));
+    expect(textPos(svg, 'goes manual').x).toBe(textX(svg, `2${DOT}1`));
+  });
+});
+
 describe('route rendering — spotlight dimming', () => {
   it('dims a route group that is not in the spotlight set', () => {
     const doc = docWith([
